@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -51,6 +53,27 @@ func main() {
 	}
 
 	router := gin.Default()
+
+	// CORS: izinkan frontend lokal (localhost:3000) memanggil gateway.
+	// Bila di-deploy, tambahkan origin produksi lewat env ALLOWED_ORIGINS
+	// (dipisah koma). Contoh: ALLOWED_ORIGINS=https://app.example.com
+	origins := []string{"http://localhost:3000", "http://127.0.0.1:3000"}
+	if extra := os.Getenv("ALLOWED_ORIGINS"); extra != "" {
+		for _, o := range strings.Split(extra, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				origins = append(origins, trimmed)
+			}
+		}
+	}
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     origins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"service": "api-gateway", "status": "ok", "routes": []string{
 			"/identity/*", "/product/*", "/inventory/*", "/sales/*", "/finance/*",
