@@ -1,0 +1,76 @@
+version: "3.9"
+
+# Compose file khusus untuk PostgreSQL yang dipakai kelima microservice.
+# Setiap service memiliki database sendiri agar batas domain tetap tegas.
+services:
+  postgres-identity:
+    image: postgres:16-alpine
+    container_name: pg-identity
+    environment:
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: identity
+      POSTGRES_DB: identity
+    ports:
+      - "5433:5432"
+    volumes:
+      - identity_data:/var/lib/postgresql/data
+      - ../migrations/identity.sql:/docker-entrypoint-initdb.d/identity.sql:ro
+
+  postgres-product:
+    image: postgres:16-alpine
+    container_name: pg-product
+    environment:
+      POSTGRES_USER: product
+      POSTGRES_PASSWORD: product
+      POSTGRES_DB: product
+    ports:
+      - "5434:5432"
+    volumes:
+      - product_data:/var/lib/postgresql/data
+      - ../migrations/product.sql:/docker-entrypoint-initdb.d/product.sql:ro
+
+  postgres-inventory:
+    image: postgres:16-alpine
+    container_name: pg-inventory
+    environment:
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory
+      POSTGRES_DB: inventory
+    ports:
+      - "5435:5432"
+    volumes:
+      - inventory_data:/var/lib/postgresql/data
+      - ../migrations/inventory.sql:/docker-entrypoint-initdb.d/inventory.sql:ro
+
+  postgres-sales:
+    image: postgres:16-alpine
+    container_name: pg-sales
+    environment:
+      POSTGRES_USER: sales
+      POSTGRES_PASSWORD: sales
+      POSTGRES_DB: sales
+    ports:
+      - "5436:5432"
+    volumes:
+      - sales_data:/var/lib/postgresql/data
+      - ../migrations/sales.sql:/docker-entrypoint-initdb.d/sales.sql:ro
+
+  postgres-finance:
+    image: postgres:16-alpine
+    container_name: pg-finance
+    environment:
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: finance
+      POSTGRES_DB: finance
+    ports:
+      - "5437:5432"
+    volumes:
+      - finance_data:/var/lib/postgresql/data
+      - ../migrations/finance.sql:/docker-entrypoint-initdb.d/finance.sql:ro
+
+volumes:
+  identity_data:
+  product_data:
+  inventory_data:
+  sales_data:
+  finance_data:

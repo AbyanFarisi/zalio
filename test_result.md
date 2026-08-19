@@ -110,11 +110,11 @@
 ##     file: "/app/be/cmd/*-service/main.go"
 ##     stuck_count: 0
 ##     priority: "high"
-##     needs_retesting: true
+##     needs_retesting: false
 ##     status_history:
 ##         - working: "NA"
 ##           agent: "main"
-##           comment: "Lima service dan helper database dibuat. Kompilasi belum dapat dijalankan karena gofmt/go tidak tersedia di container."
+##           comment: "Lima service, helper database, dan domain product dibuat; gofmt serta go test ./... lulus setelah Go 1.22 dipasang."
 ##   - task: "Optional PostgreSQL helper"
 ##     implemented: true
 ##     working: "NA"
