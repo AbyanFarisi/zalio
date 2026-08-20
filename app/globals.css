@@ -9,13 +9,13 @@
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 174 72% 41%;
+  --primary: 217 89% 61%;
   --primary-foreground: 0 0% 100%;
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
-  --accent: 174 72% 41%;
+  --accent: 217 89% 61%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
@@ -44,3 +44,28 @@ body { background-color: #F5F7FA; color: hsl(var(--foreground)); }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 .animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+/* ===== Dark mode (class-based) ===== */
+html.dark body { background-color: #0f172a; color: #e2e8f0; }
+.dark .bg-white { background-color: #1e293b !important; }
+.dark .bg-slate-50 { background-color: #0f172a; }
+.dark .bg-slate-100 { background-color: #334155; }
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark .text-slate-800 { color: #e2e8f0; }
+.dark .text-slate-700 { color: #cbd5e1; }
+.dark .text-slate-600 { color: #cbd5e1; }
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .text-slate-400 { color: #94a3b8; }
+.dark .border-slate-100 { border-color: #334155; }
+.dark .border-slate-200 { border-color: #334155; }
+.dark .border-slate-300 { border-color: #475569; }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+.dark .hover\:bg-slate-50:hover { background-color: #334155; }
+.dark .hover\:bg-slate-100:hover { background-color: #475569; }
+.dark input, .dark select, .dark textarea { background-color: #1e293b; color: #e2e8f0; border-color: #334155; }
+.dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
+.dark .shadow-sm, .dark .shadow-md, .dark .shadow-2xl { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+.dark .sidebar-scroll::-webkit-scrollbar-thumb { background: #475569; }
+/* keep brand tints readable on dark */
+.dark .bg-brand-50 { background-color: rgba(66,133,244,0.15) !important; }
+

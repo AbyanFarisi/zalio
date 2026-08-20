@@ -60,6 +60,9 @@ func main() {
 	mux.HandleFunc("/master/sales-orders", salesOrdersHandler)
 	mux.HandleFunc("/master/sales-orders/", salesOrderItemRouter)
 
+	// Additional modules (finance, purchase, inventory, categories, activity log, etc.)
+	registerModules(mux)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8082"

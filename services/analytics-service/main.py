@@ -164,6 +164,184 @@ def sales_trend(days: int = 30):
     return {"days": days, "data": rows}
 
 
+@app.get("/analytics/charts")
+def charts():
+    """Bundle of chart data for dashboard visualizations."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Sales daily (14d)
+            cur.execute("""
+                SELECT to_char(DATE(order_date),'DD Mon') AS d, COALESCE(SUM(total),0) AS total
+                FROM sales_orders WHERE order_date >= CURRENT_DATE - INTERVAL '14 days'
+                GROUP BY DATE(order_date) ORDER BY DATE(order_date)
+            """)
+            sales_daily = [{"label": r["d"], "value": float(r["total"])} for r in cur.fetchall()]
+            # Purchase daily (14d)
+            cur.execute("""
+                SELECT to_char(DATE(order_date),'DD Mon') AS d, COALESCE(SUM(total),0) AS total
+                FROM purchase_orders WHERE order_date >= CURRENT_DATE - INTERVAL '14 days'
+                GROUP BY DATE(order_date) ORDER BY DATE(order_date)
+            """)
+            purchase_daily = [{"label": r["d"], "value": float(r["total"])} for r in cur.fetchall()]
+            # Category distribution (product value per category)
+            cur.execute("""
+                SELECT COALESCE(c.name,'Lainnya') AS name, COUNT(*) AS n,
+                       COALESCE(SUM(p.stock_qty*p.selling_price),0) AS value
+                FROM products p LEFT JOIN categories c ON p.category_id=c.id
+                WHERE p.is_active=TRUE GROUP BY c.name ORDER BY value DESC LIMIT 8
+            """)
+            category_dist = [{"name": r["name"], "count": int(r["n"]), "value": float(r["value"])} for r in cur.fetchall()]
+            # Stock status buckets
+            cur.execute("""
+                SELECT
+                  COUNT(*) FILTER (WHERE stock_qty <= 0) AS out_stock,
+                  COUNT(*) FILTER (WHERE stock_qty > 0 AND stock_qty < COALESCE(reorder_point,20)) AS low_stock,
+                  COUNT(*) FILTER (WHERE stock_qty >= COALESCE(reorder_point,20)) AS in_stock
+                FROM products WHERE is_active=TRUE
+            """)
+            r = cur.fetchone()
+            stock_status = [
+                {"name": "Aman", "value": int(r["in_stock"] or 0)},
+                {"name": "Menipis", "value": int(r["low_stock"] or 0)},
+                {"name": "Habis", "value": int(r["out_stock"] or 0)},
+            ]
+            # Top products by stock value
+            cur.execute("""
+                SELECT name, (stock_qty*selling_price) AS value FROM products
+                WHERE is_active=TRUE ORDER BY value DESC LIMIT 6
+            """)
+            top_products = [{"name": r["name"], "value": float(r["value"])} for r in cur.fetchall()]
+    return {
+        "sales_daily": sales_daily,
+        "purchase_daily": purchase_daily,
+        "category_distribution": category_dist,
+        "stock_status": stock_status,
+        "top_products": top_products,
+    }
+
+
+@app.get("/analytics/activity-summary")
+def activity_summary():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) AS c FROM activity_logs")
+            total = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) AS c FROM activity_logs WHERE DATE(created_at)=CURRENT_DATE")
+            today = cur.fetchone()["c"]
+            cur.execute("SELECT COALESCE(action,'') AS action, COUNT(*) AS n FROM activity_logs GROUP BY action ORDER BY n DESC")
+            by_action = [{"name": r["action"], "value": int(r["n"])} for r in cur.fetchall()]
+            cur.execute("SELECT COALESCE(module,'') AS module, COUNT(*) AS n FROM activity_logs GROUP BY module ORDER BY n DESC LIMIT 8")
+            by_module = [{"name": r["module"], "value": int(r["n"])} for r in cur.fetchall()]
+            cur.execute("""
+                SELECT to_char(DATE(created_at),'DD Mon') AS d, COUNT(*) AS n
+                FROM activity_logs WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
+                GROUP BY DATE(created_at) ORDER BY DATE(created_at)
+            """)
+            trend = [{"label": r["d"], "value": int(r["n"])} for r in cur.fetchall()]
+    return {"total": total, "today": today, "by_action": by_action, "by_module": by_module, "trend": trend}
+
+
+@app.get("/analytics/reorder")
+def reorder():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.sku, p.name, p.stock_qty, COALESCE(p.reorder_point,20) AS reorder_point,
+                       COALESCE(b.name,'') AS brand, COALESCE(c.name,'') AS category
+                FROM products p LEFT JOIN brands b ON p.brand_id=b.id
+                LEFT JOIN categories c ON p.category_id=c.id
+                WHERE p.stock_qty < COALESCE(p.reorder_point,20) AND p.is_active=TRUE
+                ORDER BY (COALESCE(p.reorder_point,20)-p.stock_qty) DESC
+            """)
+            rows = []
+            for r in cur.fetchall():
+                d = dict(r)
+                d["stock_qty"] = float(d["stock_qty"]); d["reorder_point"] = float(d["reorder_point"])
+                d["suggested_qty"] = max(0, d["reorder_point"]*2 - d["stock_qty"])
+                rows.append(d)
+    return {"items": rows, "count": len(rows)}
+
+
+@app.get("/analytics/stock-by-warehouse")
+def stock_by_warehouse():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.sku, p.name, p.stock_qty, p.selling_price,
+                       (p.stock_qty*p.selling_price) AS value,
+                       COALESCE(u.code,'') AS uom
+                FROM products p LEFT JOIN uoms u ON p.uom_id=u.id
+                WHERE p.is_active=TRUE ORDER BY value DESC
+            """)
+            rows = []
+            for r in cur.fetchall():
+                d = dict(r)
+                d["stock_qty"] = float(d["stock_qty"]); d["selling_price"] = float(d["selling_price"]); d["value"] = float(d["value"])
+                rows.append(d)
+    return {"items": rows, "count": len(rows)}
+
+
+@app.get("/analytics/product-performance")
+def product_performance():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT p.sku, p.name,
+                       COALESCE(SUM(soi.quantity),0) AS qty_sold,
+                       COALESCE(SUM(soi.subtotal),0) AS revenue
+                FROM products p
+                LEFT JOIN sales_order_items soi ON soi.product_id=p.id
+                LEFT JOIN sales_orders so ON soi.order_id=so.id AND so.status IN ('CONFIRMED','INVOICED','PAID')
+                WHERE p.is_active=TRUE
+                GROUP BY p.id, p.sku, p.name ORDER BY revenue DESC LIMIT 50
+            """)
+            rows = []
+            for r in cur.fetchall():
+                d = dict(r); d["qty_sold"] = float(d["qty_sold"]); d["revenue"] = float(d["revenue"])
+                rows.append(d)
+    return {"items": rows, "count": len(rows)}
+
+
+@app.get("/analytics/supplier-performance")
+def supplier_performance():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT s.code, s.name,
+                       COUNT(po.id) AS po_count,
+                       COALESCE(SUM(po.total),0) AS total_value
+                FROM suppliers s
+                LEFT JOIN purchase_orders po ON po.supplier_id=s.id AND po.status IN ('CONFIRMED')
+                WHERE s.is_active=TRUE
+                GROUP BY s.id, s.code, s.name ORDER BY total_value DESC LIMIT 50
+            """)
+            rows = []
+            for r in cur.fetchall():
+                d = dict(r); d["po_count"] = int(d["po_count"]); d["total_value"] = float(d["total_value"])
+                rows.append(d)
+    return {"items": rows, "count": len(rows)}
+
+
+@app.get("/analytics/cash-flow")
+def cash_flow():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT to_char(DATE_TRUNC('month', trx_date),'Mon YYYY') AS period,
+                       COALESCE(SUM(amount) FILTER (WHERE trx_type IN ('IN','MASUK','CREDIT')),0) AS inflow,
+                       COALESCE(SUM(amount) FILTER (WHERE trx_type IN ('OUT','KELUAR','DEBIT','TRANSFER')),0) AS outflow
+                FROM bank_transactions
+                GROUP BY DATE_TRUNC('month', trx_date) ORDER BY DATE_TRUNC('month', trx_date)
+            """)
+            rows = []
+            total_in = total_out = 0.0
+            for r in cur.fetchall():
+                inflow = float(r["inflow"]); outflow = float(r["outflow"])
+                total_in += inflow; total_out += outflow
+                rows.append({"label": r["period"], "inflow": inflow, "outflow": outflow, "net": inflow-outflow})
+    return {"data": rows, "total_inflow": total_in, "total_outflow": total_out, "net": total_in-total_out}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8083")))
