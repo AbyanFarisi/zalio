@@ -31,7 +31,10 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
+<<<<<<< HEAD
 
+=======
+>>>>>>> 4b97c3e2f7edbd99b1b7794997a2894aaac17138
 *token.json*
 *credentials.json*
 
@@ -79,7 +82,13 @@ agenthub/agents/youtube/db
 memory/test_credentials.md
 
 # Mobile development
+<<<<<<< HEAD
 android-sdk/
+=======
+android-sdk/node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-gnu.node
+node_modules/@next/swc-linux-arm64-musl/next-swc.linux-arm64-musl.node
+node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-gnu.node
+>>>>>>> 4b97c3e2f7edbd99b1b7794997a2894aaac17138
 .env
 .env.*
 *.env
