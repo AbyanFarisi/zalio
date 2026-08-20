@@ -8,17 +8,132 @@ import {
   LogOut, Plus, Edit2, Trash2, Filter, Download, Upload, X,
   TrendingUp, AlertCircle, Users, Truck, Warehouse, DollarSign,
   ChevronsLeft, ChevronsRight, Home, FileText, BarChart3, Sparkles, Eye,
-  Activity, TrendingDown, Landmark, Receipt, ClipboardList, ArrowRightLeft, RotateCcw, Menu
+  Activity, TrendingDown, Landmark, Receipt, ClipboardList, ArrowRightLeft, RotateCcw, Menu,
+  Printer, Sun, Moon, Minus, ScanLine
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from 'recharts';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const CHART_COLORS = ['#4285F4', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#10b981', '#3b82f6'];
 const fmtNum = n => new Intl.NumberFormat('id-ID').format(Number(n) || 0);
 const fmtRupiah = n => 'Rp ' + fmtNum(n);
 const fmtCompact = n => new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0);
+
+// ===== Document (Struk / PO) print & PDF helpers =====
+function docConfig(order, type) {
+  const isSales = type === 'sales';
+  return {
+    isSales,
+    heading: isSales ? 'STRUK PENJUALAN' : 'PURCHASE ORDER',
+    number: order.order_number || '-',
+    date: order.order_date || order.created_at || '',
+    partyLabel: isSales ? 'Pelanggan' : 'Pemasok',
+    partyName: (isSales ? order.customer_name : order.supplier_name) || '-',
+    branch: order.branch_name || '-',
+    payment: order.payment_method || '-',
+    status: order.status || '',
+    notes: order.notes || '',
+    items: order.items || [],
+    subtotal: Number(order.subtotal) || 0,
+    discount: Number(order.discount) || 0,
+    tax: Number(order.tax) || 0,
+    total: Number(order.total) || 0,
+  };
+}
+
+function printDocument(order, type) {
+  const c = docConfig(order, type);
+  const rows = c.items.map(it => `<tr>
+      <td>${it.product_name || ''}<br><span style="color:#888;font-size:11px">${it.product_sku || ''}</span></td>
+      <td style="text-align:right">${fmtNum(it.quantity)}</td>
+      <td style="text-align:right">${fmtRupiah(it.price)}</td>
+      <td style="text-align:right">${fmtRupiah(it.subtotal)}</td>
+    </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><title>${c.number}</title><meta charset="utf-8">
+    <style>
+      *{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}
+      body{padding:28px;color:#1e293b;max-width:720px;margin:0 auto}
+      .brand{color:#4285F4;font-weight:800;font-size:22px}
+      .muted{color:#64748b;font-size:12px}
+      h2{margin:14px 0 4px;font-size:16px;letter-spacing:1px}
+      table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+      th,td{padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:left}
+      th{background:#f1f5f9;font-size:11px;text-transform:uppercase;color:#475569}
+      .totrow{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+      .total{border-top:2px solid #4285F4;margin-top:6px;padding-top:8px;font-weight:800;font-size:16px}
+      .grid{display:flex;gap:24px;margin-top:10px;font-size:13px}
+      .badge{display:inline-block;padding:2px 10px;border-radius:999px;background:#eaf1fd;color:#2b62c0;font-size:11px;font-weight:700}
+      @media print{button{display:none}}
+    </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #4285F4;padding-bottom:12px">
+      <div><div class="brand">Zalio ERP</div><div class="muted">Enterprise Suite</div></div>
+      <div style="text-align:right"><h2>${c.heading}</h2><div class="muted">No: <b>${c.number}</b></div><div class="muted">Tgl: ${new Date(c.date).toLocaleString('id-ID')}</div><div style="margin-top:4px"><span class="badge">${c.status}</span></div></div>
+    </div>
+    <div class="grid">
+      <div><div class="muted">${c.partyLabel}</div><b>${c.partyName}</b></div>
+      <div><div class="muted">Cabang</div><b>${c.branch}</b></div>
+      <div><div class="muted">Pembayaran</div><b>${c.payment}</b></div>
+    </div>
+    <table><thead><tr><th>Produk</th><th style="text-align:right">Qty</th><th style="text-align:right">Harga</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:14px;margin-left:auto;width:280px">
+      <div class="totrow"><span>Subtotal</span><span>${fmtRupiah(c.subtotal)}</span></div>
+      ${c.discount ? `<div class="totrow" style="color:#dc2626"><span>Diskon</span><span>-${fmtRupiah(c.discount)}</span></div>` : ''}
+      ${c.tax ? `<div class="totrow"><span>Pajak</span><span>+${fmtRupiah(c.tax)}</span></div>` : ''}
+      <div class="totrow total"><span>TOTAL</span><span>${fmtRupiah(c.total)}</span></div>
+    </div>
+    ${c.notes ? `<p class="muted" style="margin-top:16px">Catatan: ${c.notes}</p>` : ''}
+    <p class="muted" style="margin-top:24px;text-align:center">Terima kasih telah bertransaksi dengan Zalio ERP</p>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) { toast.error('Popup diblokir browser'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
+
+function downloadPdf(order, type) {
+  const c = docConfig(order, type);
+  const doc = new jsPDF();
+  doc.setTextColor(66, 133, 244); doc.setFontSize(20); doc.setFont(undefined, 'bold');
+  doc.text('Zalio ERP', 14, 18);
+  doc.setTextColor(120); doc.setFontSize(9); doc.setFont(undefined, 'normal');
+  doc.text('Enterprise Suite', 14, 23);
+  doc.setTextColor(30); doc.setFontSize(14); doc.setFont(undefined, 'bold');
+  doc.text(c.heading, 196, 18, { align: 'right' });
+  doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
+  doc.text(`No: ${c.number}`, 196, 24, { align: 'right' });
+  doc.text(`Tgl: ${new Date(c.date).toLocaleDateString('id-ID')}`, 196, 29, { align: 'right' });
+  doc.text(`Status: ${c.status}`, 196, 34, { align: 'right' });
+  doc.setDrawColor(66, 133, 244); doc.setLineWidth(0.6); doc.line(14, 38, 196, 38);
+  doc.setTextColor(30); doc.setFontSize(10);
+  doc.text(`${c.partyLabel}: ${c.partyName}`, 14, 46);
+  doc.text(`Cabang: ${c.branch}`, 14, 52);
+  doc.text(`Pembayaran: ${c.payment}`, 14, 58);
+  autoTable(doc, {
+    startY: 64,
+    head: [['Produk', 'SKU', 'Qty', 'Harga', 'Subtotal']],
+    body: c.items.map(it => [it.product_name || '', it.product_sku || '', fmtNum(it.quantity), fmtRupiah(it.price), fmtRupiah(it.subtotal)]),
+    headStyles: { fillColor: [66, 133, 244] },
+    styles: { fontSize: 9 },
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+  });
+  let y = doc.lastAutoTable.finalY + 8;
+  const right = 196;
+  doc.setFontSize(10);
+  doc.text('Subtotal', 150, y); doc.text(fmtRupiah(c.subtotal), right, y, { align: 'right' });
+  if (c.discount) { y += 6; doc.setTextColor(220, 38, 38); doc.text('Diskon', 150, y); doc.text('-' + fmtRupiah(c.discount), right, y, { align: 'right' }); doc.setTextColor(30); }
+  if (c.tax) { y += 6; doc.text('Pajak', 150, y); doc.text('+' + fmtRupiah(c.tax), right, y, { align: 'right' }); }
+  y += 8; doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(66, 133, 244);
+  doc.text('TOTAL', 150, y); doc.text(fmtRupiah(c.total), right, y, { align: 'right' });
+  doc.save(`${c.number}.pdf`);
+  toast.success('PDF diunduh');
+}
+
 
 const MENU = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, single: true },
@@ -62,6 +177,7 @@ const MENU = [
       { key: 'uoms', label: 'Satuan (UoM)' }, { key: 'product-performance', label: 'Kinerja Produk' },
   ]},
   { key: 'pos', label: 'Kasir POS', icon: Store, children: [
+      { key: 'pos-cashier', label: 'Kasir (Point of Sale)' },
       { key: 'pos-setting', label: 'Pengaturan POS' }, { key: 'sales-type', label: 'Tipe Penjualan' },
       { key: 'expense-category', label: 'Kategori Beban' }, { key: 'promotion', label: 'Promosi' },
   ]},
@@ -199,7 +315,7 @@ function Sidebar({ current, setCurrent, collapsed, setCollapsed, mobileOpen, set
   );
 }
 
-function Header({ user, currentKey, branches, activeBranch, setActiveBranch, onLogout, onMenuClick }) {
+function Header({ user, currentKey, branches, activeBranch, setActiveBranch, onLogout, onMenuClick, dark, onToggleTheme }) {
   const found = findMenuItem(currentKey);
   const parentLabel = found?.parent?.label;
   const itemLabel = found?.item?.label || currentKey;
@@ -219,6 +335,7 @@ function Header({ user, currentKey, branches, activeBranch, setActiveBranch, onL
           </select>
           <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
+        <button onClick={onToggleTheme} className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition flex-shrink-0" title={dark ? 'Mode Terang' : 'Mode Gelap'}>{dark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-slate-300" />}</button>
         <button className="w-9 h-9 rounded-lg hover:bg-slate-800 items-center justify-center transition hidden md:flex"><Search className="w-4 h-4 text-slate-300" /></button>
         <button className="w-9 h-9 rounded-lg hover:bg-slate-800 items-center justify-center transition relative hidden md:flex"><Bell className="w-4 h-4 text-slate-300" /><span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span></button>
         <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
@@ -1150,6 +1267,8 @@ function SalesOrderDetailModal({ open, onClose, order, onConfirm, onCancel, prod
             )}
           </div>
           <div className="flex gap-2">
+            <GhostButton onClick={() => printDocument(order, 'sales')}><Printer className="w-4 h-4" />Cetak</GhostButton>
+            <GhostButton onClick={() => downloadPdf(order, 'sales')}><Download className="w-4 h-4" />PDF</GhostButton>
             <GhostButton onClick={onClose}>Tutup</GhostButton>
             {isDraft && (
               <PrimaryButton onClick={() => onConfirm(order.id)} disabled={(order.items || []).length === 0}>
@@ -1467,6 +1586,8 @@ function PurchaseDetailModal({ order, onClose, onConfirm, onCancel }) {
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+          <GhostButton onClick={() => printDocument(order, 'purchase')}><Printer className="w-4 h-4" />Cetak</GhostButton>
+          <GhostButton onClick={() => downloadPdf(order, 'purchase')}><Download className="w-4 h-4" />PDF</GhostButton>
           {order.status === 'DRAFT' && <PrimaryButton onClick={() => onConfirm(order.id)}><FileText className="w-4 h-4" />Konfirmasi (Terima Stok)</PrimaryButton>}
           {order.status === 'CONFIRMED' && <GhostButton onClick={() => onCancel(order.id)}>Batalkan</GhostButton>}
         </div>
@@ -1547,6 +1668,124 @@ function RawListReport({ title, breadcrumb, endpoint, columns }) {
   );
 }
 
+function POSCashierPage() {
+  const [products, setProducts] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [q, setQ] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [payment, setPayment] = useState('CASH');
+  const [customerId, setCustomerId] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [cash, setCash] = useState(0);
+  const [processing, setProcessing] = useState(false);
+  useEffect(() => { (async () => {
+    const [p, b, c] = await Promise.all([api('/master/products'), api('/auth/branches'), api('/master/customers')]);
+    if (p.ok) setProducts(p.data || []);
+    if (b.ok) { setBranches(b.data || []); if (b.data?.[0]) setBranchId(b.data[0].id); }
+    if (c.ok) setCustomers(c.data || []);
+  })(); }, []);
+  const filtered = products.filter(p => !q || p.name?.toLowerCase().includes(q.toLowerCase()) || p.sku?.toLowerCase().includes(q.toLowerCase()));
+  function addToCart(p) {
+    setCart(prev => {
+      const ex = prev.find(x => x.product_id === p.id);
+      if (ex) return prev.map(x => x.product_id === p.id ? { ...x, quantity: x.quantity + 1 } : x);
+      return [...prev, { product_id: p.id, name: p.name, sku: p.sku, price: Number(p.selling_price) || 0, quantity: 1 }];
+    });
+  }
+  function setQty(id, d) { setCart(prev => prev.map(x => x.product_id === id ? { ...x, quantity: Math.max(1, x.quantity + d) } : x)); }
+  function removeItem(id) { setCart(prev => prev.filter(x => x.product_id !== id)); }
+  const subtotal = cart.reduce((s, x) => s + x.price * x.quantity, 0);
+  const total = Math.max(0, subtotal - (discount || 0));
+  const change = (cash || 0) - total;
+  async function checkout() {
+    if (cart.length === 0) { toast.error('Keranjang masih kosong'); return; }
+    if (payment === 'CASH' && (cash || 0) < total) { toast.error('Uang tunai kurang dari total'); return; }
+    setProcessing(true);
+    const body = { payment_method: payment, discount: discount || 0, items: cart.map(c => ({ product_id: c.product_id, quantity: c.quantity, price: c.price })) };
+    if (customerId) body.customer_id = customerId;
+    if (branchId) body.branch_id = branchId;
+    const r = await api('/master/sales-orders', { method: 'POST', body: JSON.stringify(body) });
+    if (!r.ok) { setProcessing(false); toast.error(r.data?.error || 'Gagal membuat transaksi'); return; }
+    const id = r.data.id;
+    await api(`/master/sales-orders/${id}/confirm`, { method: 'POST' });
+    const d = await api(`/master/sales-orders/${id}`);
+    setProcessing(false);
+    toast.success(`Transaksi ${r.data.order_number} berhasil`);
+    if (d.ok) printDocument(d.data, 'sales');
+    setCart([]); setDiscount(0); setCash(0);
+    const p = await api('/master/products'); if (p.ok) setProducts(p.data || []);
+  }
+  return (
+    <div className="p-4 md:p-6">
+      <PageHeader title="Kasir (Point of Sale)" breadcrumb="Kasir POS > Kasir" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Product picker */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+          <div className="relative mb-4">
+            <ScanLine className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input autoFocus placeholder="Cari / pindai produk (nama atau SKU)..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
+            {filtered.length === 0 && <div className="col-span-full text-center py-10 text-slate-400 text-sm">Tidak ada produk</div>}
+            {filtered.map(p => (
+              <button key={p.id} onClick={() => addToCart(p)} className="text-left p-3 rounded-xl border border-slate-100 hover:border-brand-400 hover:shadow-md transition bg-white group">
+                <div className="w-full h-16 rounded-lg bg-gradient-to-br from-brand-50 to-slate-50 flex items-center justify-center mb-2"><Package className="w-6 h-6 text-brand-400" /></div>
+                <div className="text-xs font-medium text-slate-900 line-clamp-2 leading-tight h-8">{p.name}</div>
+                <div className="text-[10px] text-slate-400 mt-1">{p.sku}</div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-sm font-bold text-brand-600">{fmtRupiah(p.selling_price)}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${Number(p.stock_qty) > 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{fmtNum(p.stock_qty)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Cart */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col">
+          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-brand-600" /><h3 className="font-semibold text-slate-900">Keranjang ({cart.length})</h3>
+            {cart.length > 0 && <button onClick={() => setCart([])} className="ml-auto text-xs text-red-500 hover:underline">Kosongkan</button>}
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[38vh] lg:max-h-[calc(100vh-520px)]">
+            {cart.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">Pilih produk untuk memulai</div>}
+            {cart.map(x => (
+              <div key={x.product_id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
+                <div className="flex-1 min-w-0"><div className="text-xs font-medium text-slate-900 truncate">{x.name}</div><div className="text-[11px] text-slate-500">{fmtRupiah(x.price)} x {x.quantity} = <b>{fmtRupiah(x.price * x.quantity)}</b></div></div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setQty(x.product_id, -1)} className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100"><Minus className="w-3 h-3" /></button>
+                  <span className="w-6 text-center text-xs font-medium">{x.quantity}</span>
+                  <button onClick={() => setQty(x.product_id, 1)} className="w-6 h-6 rounded bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100"><Plus className="w-3 h-3" /></button>
+                  <button onClick={() => removeItem(x.product_id)} className="w-6 h-6 rounded flex items-center justify-center text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-4 border-t border-slate-100 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="block text-[11px] text-slate-500 mb-1">Pelanggan</label><SelectFld value={customerId} onChange={e => setCustomerId(e.target.value)}><option value="">Umum</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</SelectFld></div>
+              <div><label className="block text-[11px] text-slate-500 mb-1">Pembayaran</label><SelectFld value={payment} onChange={e => setPayment(e.target.value)}><option value="CASH">Tunai</option><option value="TRANSFER">Transfer</option><option value="QRIS">QRIS</option><option value="CARD">Kartu</option></SelectFld></div>
+            </div>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{fmtRupiah(subtotal)}</span></div>
+              <div className="flex justify-between items-center text-slate-600"><span>Diskon</span><input type="number" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} className="w-28 text-right px-2 py-1 rounded border border-slate-200 text-sm outline-none focus:border-brand-500" /></div>
+              <div className="flex justify-between text-lg font-bold text-slate-900 pt-1.5 border-t border-slate-200"><span>Total</span><span className="text-brand-600">{fmtRupiah(total)}</span></div>
+              {payment === 'CASH' && (<>
+                <div className="flex justify-between items-center text-slate-600"><span>Tunai</span><input type="number" value={cash} onChange={e => setCash(parseFloat(e.target.value) || 0)} className="w-32 text-right px-2 py-1 rounded border border-slate-200 text-sm outline-none focus:border-brand-500" /></div>
+                <div className="flex justify-between text-slate-600"><span>Kembalian</span><span className={change < 0 ? 'text-red-500 font-medium' : 'text-green-600 font-medium'}>{fmtRupiah(Math.max(0, change))}</span></div>
+              </>)}
+            </div>
+            <button onClick={checkout} disabled={processing || cart.length === 0} className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 transition">
+              <Receipt className="w-5 h-5" />{processing ? 'Memproses...' : `Bayar ${fmtRupiah(total)}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StubPage({ title, breadcrumb }) {
   return (
     <div className="p-6">
@@ -1565,6 +1804,20 @@ function App() {
   const [current, setCurrent] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const t = localStorage.getItem('zalio_theme') === 'dark';
+    setDark(t);
+    document.documentElement.classList.toggle('dark', t);
+  }, []);
+  function toggleTheme() {
+    setDark(d => {
+      const nd = !d;
+      localStorage.setItem('zalio_theme', nd ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', nd);
+      return nd;
+    });
+  }
   const [branches, setBranches] = useState([]);
   const [activeBranch, setActiveBranch] = useState(null);
   const [ready, setReady] = useState(false);
@@ -1633,6 +1886,7 @@ function App() {
       extraFetch={{ products: '/master/products', warehouses: '/master/warehouses' }}
       formFields={[{ key: 'product_id', label: 'Produk', type: 'select', optionsKey: 'products', required: true }, { key: 'warehouse_id', label: 'Gudang', type: 'select', optionsKey: 'warehouses', required: true }, { key: 'movement_type', label: 'Tipe', type: 'select', options: [{ value: 'IN', name: 'IN - Masuk' }, { value: 'OUT', name: 'OUT - Keluar' }, { value: 'ADJUSTMENT', name: 'ADJUSTMENT - Penyesuaian' }], required: true }, { key: 'quantity', label: 'Qty', type: 'number', required: true }, { key: 'reference', label: 'Referensi' }, { key: 'notes', label: 'Catatan', type: 'textarea', full: true }]} />;
     if (current === 'purchase-transaction') return <PurchaseTransactionPage />;
+    if (current === 'pos-cashier') return <POSCashierPage />;
     if (current === 'activity-log') return <ActivityPage />;
     if (current === 'cash-flow') return <CashFlowReport />;
     if (REPORT_CONFIGS[current]) { const c = REPORT_CONFIGS[current]; return c.isRaw ? <RawListReport key={current} {...c} /> : <ReportPage key={current} {...c} />; }
@@ -1643,7 +1897,7 @@ function App() {
     <div className="h-screen flex bg-slate-50 overflow-hidden">
       <Sidebar current={current} setCurrent={setCurrent} collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header user={user} currentKey={current} branches={branches} activeBranch={activeBranch} setActiveBranch={setActiveBranch} onLogout={logout} onMenuClick={() => setMobileOpen(true)} />
+        <Header user={user} currentKey={current} branches={branches} activeBranch={activeBranch} setActiveBranch={setActiveBranch} onLogout={logout} onMenuClick={() => setMobileOpen(true)} dark={dark} onToggleTheme={toggleTheme} />
         <main className="flex-1 overflow-y-auto">{renderContent()}</main>
       </div>
     </div>
