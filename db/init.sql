@@ -191,7 +191,7 @@ ON CONFLICT (name) DO NOTHING;
 -- Default admin user: email=admin@zalio.com password=admin123
 -- bcrypt hash of 'admin123'
 INSERT INTO users (email, password_hash, full_name, role_id, branch_id)
-  SELECT 'admin@zalio.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Administrator Zalio',
+  SELECT 'admin@zalio.com', '$2b$10$Mq6gTGV5Cl1pycbl5henseB41HcEnMzlYnXcTriKjYeyKpKbDOkVa', 'Administrator Zalio',
     (SELECT id FROM user_roles WHERE name='Admin' LIMIT 1),
     (SELECT id FROM branches WHERE code='HQ' LIMIT 1)
 ON CONFLICT (email) DO NOTHING;
