@@ -8,14 +8,14 @@ import {
   LogOut, Plus, Edit2, Trash2, Filter, Download, Upload, X,
   TrendingUp, AlertCircle, Users, Truck, Warehouse, DollarSign,
   ChevronsLeft, ChevronsRight, Home, FileText, BarChart3, Sparkles, Eye,
-  Activity, TrendingDown, Landmark, Receipt, ClipboardList, ArrowRightLeft, RotateCcw
+  Activity, TrendingDown, Landmark, Receipt, ClipboardList, ArrowRightLeft, RotateCcw, Menu
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from 'recharts';
 
-const CHART_COLORS = ['#14b8a6', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#10b981', '#3b82f6'];
+const CHART_COLORS = ['#4285F4', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#10b981', '#3b82f6'];
 const fmtNum = n => new Intl.NumberFormat('id-ID').format(Number(n) || 0);
 const fmtRupiah = n => 'Rp ' + fmtNum(n);
 const fmtCompact = n => new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(n) || 0);
@@ -108,11 +108,11 @@ function LoginPage({ onLogin }) {
     onLogin(r.data.user);
   }
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-teal-900 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 mb-3 shadow-lg">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 mb-3 shadow-lg">
               <Sparkles className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900">Zalio ERP</h1>
@@ -121,14 +121,14 @@ function LoginPage({ onLogin }) {
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition" />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none transition" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition" />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none transition" />
             </div>
             {err && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</div>}
-            <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 text-white font-medium hover:from-teal-600 hover:to-teal-700 shadow-md disabled:opacity-50 transition">
+            <button type="submit" disabled={loading} className="w-full py-2.5 rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 text-white font-medium hover:from-brand-600 hover:to-brand-700 shadow-md disabled:opacity-50 transition">
               {loading ? 'Memproses...' : 'Masuk'}
             </button>
           </form>
@@ -142,85 +142,90 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function Sidebar({ current, setCurrent, collapsed, setCollapsed }) {
+function Sidebar({ current, setCurrent, collapsed, setCollapsed, mobileOpen, setMobileOpen }) {
   const [openGroups, setOpenGroups] = useState(() => {
     const found = findMenuItem(current);
     if (found?.parent) return { [found.parent.key]: true };
     return { product: true };
   });
+  const go = (k) => { setCurrent(k); setMobileOpen(false); };
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-white border-r border-slate-200 flex flex-col transition-all duration-200 flex-shrink-0`}>
-      <div className="h-16 flex items-center px-4 border-b border-slate-200">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm flex-shrink-0">
-          <Sparkles className="w-5 h-5 text-white" />
+    <>
+      {mobileOpen && <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setMobileOpen(false)} />}
+      <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 ${collapsed ? 'md:w-16' : 'md:w-64'} bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 flex-shrink-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+        <div className="h-16 flex items-center px-4 border-b border-slate-200">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-sm flex-shrink-0">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          {!collapsed && (<div className="ml-3"><div className="font-bold text-slate-900 text-sm">Zalio ERP</div><div className="text-[10px] text-slate-500">Enterprise Suite</div></div>)}
         </div>
-        {!collapsed && (<div className="ml-3"><div className="font-bold text-slate-900 text-sm">Zalio ERP</div><div className="text-[10px] text-slate-500">Enterprise Suite</div></div>)}
-      </div>
-      <nav className="flex-1 overflow-y-auto sidebar-scroll py-3 px-2">
-        {MENU.map(m => {
-          const Icon = m.icon;
-          const isActive = m.single ? current === m.key : m.children?.some(c => c.key === current);
-          const isOpen = openGroups[m.key];
-          if (m.single) return (
-            <button key={m.key} onClick={() => setCurrent(m.key)} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm mb-1 transition ${isActive ? 'bg-teal-50 text-teal-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
-              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
-              {!collapsed && <span className="ml-3">{m.label}</span>}
-            </button>
-          );
-          return (
-            <div key={m.key} className="mb-1">
-              <button onClick={() => setOpenGroups(g => ({ ...g, [m.key]: !g[m.key] }))} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm transition ${isActive ? 'bg-teal-50 text-teal-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
-                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
-                {!collapsed && (<><span className="ml-3 flex-1 text-left">{m.label}</span><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} /></>)}
+        <nav className="flex-1 overflow-y-auto sidebar-scroll py-3 px-2">
+          {MENU.map(m => {
+            const Icon = m.icon;
+            const isActive = m.single ? current === m.key : m.children?.some(c => c.key === current);
+            const isOpen = openGroups[m.key];
+            if (m.single) return (
+              <button key={m.key} onClick={() => go(m.key)} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm mb-1 transition ${isActive ? 'bg-brand-50 text-brand-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} />
+                {!collapsed && <span className="ml-3">{m.label}</span>}
               </button>
-              {!collapsed && isOpen && m.children && (
-                <div className="ml-4 mt-1 border-l border-slate-100 pl-3 space-y-0.5">
-                  {m.children.map(c => (
-                    <button key={c.key} onClick={() => setCurrent(c.key)} className={`w-full text-left px-3 py-1.5 rounded-md text-[13px] transition flex items-center justify-between ${current === c.key ? 'bg-teal-500 text-white font-medium shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-                      <span>{c.label}</span>
-                      {c.stub && <span className={`text-[9px] px-1.5 py-0.5 rounded ${current === c.key ? 'bg-white/20' : 'bg-slate-100 text-slate-400'}`}>soon</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </nav>
-      <div className="border-t border-slate-200 p-2">
-        <button onClick={() => setCollapsed(c => !c)} className="w-full flex items-center justify-center py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition">
-          {collapsed ? <ChevronsRight className="w-4 h-4" /> : <><ChevronsLeft className="w-4 h-4 mr-2" />Ciutkan</>}
-        </button>
-      </div>
-    </aside>
+            );
+            return (
+              <div key={m.key} className="mb-1">
+                <button onClick={() => setOpenGroups(g => ({ ...g, [m.key]: !g[m.key] }))} className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm transition ${isActive ? 'bg-brand-50 text-brand-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} />
+                  {!collapsed && (<><span className="ml-3 flex-1 text-left">{m.label}</span><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} /></>)}
+                </button>
+                {!collapsed && isOpen && m.children && (
+                  <div className="ml-4 mt-1 border-l border-slate-100 pl-3 space-y-0.5">
+                    {m.children.map(c => (
+                      <button key={c.key} onClick={() => go(c.key)} className={`w-full text-left px-3 py-1.5 rounded-md text-[13px] transition flex items-center justify-between ${current === c.key ? 'bg-brand-500 text-white font-medium shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+        <div className="border-t border-slate-200 p-2 hidden md:block">
+          <button onClick={() => setCollapsed(c => !c)} className="w-full flex items-center justify-center py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition">
+            {collapsed ? <ChevronsRight className="w-4 h-4" /> : <><ChevronsLeft className="w-4 h-4 mr-2" />Ciutkan</>}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 
-function Header({ user, currentKey, branches, activeBranch, setActiveBranch, onLogout }) {
+function Header({ user, currentKey, branches, activeBranch, setActiveBranch, onLogout, onMenuClick }) {
   const found = findMenuItem(currentKey);
   const parentLabel = found?.parent?.label;
   const itemLabel = found?.item?.label || currentKey;
   return (
-    <header className="h-16 bg-slate-900 text-white flex items-center px-6 shadow-sm">
-      <div className="flex items-center text-sm text-slate-300 flex-1">
-        <Home className="w-4 h-4 mr-2 text-slate-400" />
-        {parentLabel && <><span>{parentLabel}</span><ChevronRight className="w-3.5 h-3.5 mx-1.5 text-slate-500" /></>}
-        <span className="text-white font-medium">{itemLabel}</span>
+    <header className="h-16 bg-slate-900 text-white flex items-center px-3 md:px-6 shadow-sm">
+      <button onClick={onMenuClick} className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition md:hidden mr-1 flex-shrink-0" title="Menu"><Menu className="w-5 h-5 text-slate-200" /></button>
+      <div className="flex items-center text-sm text-slate-300 flex-1 min-w-0">
+        <Home className="w-4 h-4 mr-2 text-slate-400 hidden sm:block flex-shrink-0" />
+        {parentLabel && <span className="hidden md:inline">{parentLabel}</span>}
+        {parentLabel && <ChevronRight className="w-3.5 h-3.5 mx-1.5 text-slate-500 hidden md:inline flex-shrink-0" />}
+        <span className="text-white font-medium truncate">{itemLabel}</span>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <select value={activeBranch?.id || ''} onChange={e => { const b = branches.find(x => x.id === e.target.value); setActiveBranch(b); if (b) toast.success(`Beralih ke ${b.name}`); }} className="bg-slate-800 border border-slate-700 rounded-lg text-white text-sm px-3 py-1.5 pr-8 hover:bg-slate-700 cursor-pointer outline-none appearance-none">
+      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+        <div className="relative hidden sm:block">
+          <select value={activeBranch?.id || ''} onChange={e => { const b = branches.find(x => x.id === e.target.value); setActiveBranch(b); if (b) toast.success(`Beralih ke ${b.name}`); }} className="bg-slate-800 border border-slate-700 rounded-lg text-white text-sm px-3 py-1.5 pr-8 hover:bg-slate-700 cursor-pointer outline-none appearance-none max-w-[160px]">
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
           <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
-        <button className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition"><Search className="w-4 h-4 text-slate-300" /></button>
-        <button className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition relative"><Bell className="w-4 h-4 text-slate-300" /><span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span></button>
-        <div className="h-8 w-px bg-slate-700"></div>
+        <button className="w-9 h-9 rounded-lg hover:bg-slate-800 items-center justify-center transition hidden md:flex"><Search className="w-4 h-4 text-slate-300" /></button>
+        <button className="w-9 h-9 rounded-lg hover:bg-slate-800 items-center justify-center transition relative hidden md:flex"><Bell className="w-4 h-4 text-slate-300" /><span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span></button>
+        <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-xs font-bold">{user?.full_name?.charAt(0) || 'A'}</div>
-          <div className="text-right hidden md:block"><div className="text-sm font-medium">{user?.full_name || 'Admin'}</div><div className="text-[11px] text-slate-400">{user?.role || 'Administrator'}</div></div>
-          <button onClick={onLogout} className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition ml-1" title="Keluar"><LogOut className="w-4 h-4 text-slate-300" /></button>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{user?.full_name?.charAt(0) || 'A'}</div>
+          <div className="text-right hidden lg:block"><div className="text-sm font-medium">{user?.full_name || 'Admin'}</div><div className="text-[11px] text-slate-400">{user?.role || 'Administrator'}</div></div>
+          <button onClick={onLogout} className="w-9 h-9 rounded-lg hover:bg-slate-800 flex items-center justify-center transition ml-1 flex-shrink-0" title="Keluar"><LogOut className="w-4 h-4 text-slate-300" /></button>
         </div>
       </div>
     </header>
@@ -243,7 +248,7 @@ function Dashboard() {
     { label: 'Total Produk', value: fmtNum(kpi.total_products), icon: Package, color: 'from-blue-500 to-blue-600' },
     { label: 'Pelanggan', value: fmtNum(kpi.total_customers), icon: Users, color: 'from-purple-500 to-purple-600' },
     { label: 'Pemasok', value: fmtNum(kpi.total_suppliers), icon: Truck, color: 'from-orange-500 to-orange-600' },
-    { label: 'Cabang', value: fmtNum(kpi.total_branches), icon: Building2, color: 'from-teal-500 to-teal-600' },
+    { label: 'Cabang', value: fmtNum(kpi.total_branches), icon: Building2, color: 'from-brand-500 to-brand-600' },
     { label: 'Total Stok', value: fmtNum(kpi.total_stock), icon: Warehouse, color: 'from-indigo-500 to-indigo-600' },
     { label: 'Nilai Inventaris', value: fmtRupiah(kpi.inventory_value), icon: DollarSign, color: 'from-emerald-500 to-emerald-600' },
     { label: 'Stok Rendah', value: fmtNum(kpi.low_stock_alerts), icon: AlertCircle, color: 'from-red-500 to-red-600' },
@@ -275,7 +280,7 @@ function Dashboard() {
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={salesData.length >= purchaseData.length ? salesData.map((s, i) => ({ label: s.label, penjualan: s.value, pembelian: purchaseData[i]?.value || 0 })) : purchaseData.map((p, i) => ({ label: p.label, penjualan: salesData[i]?.value || 0, pembelian: p.value }))}>
               <defs>
-                <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} /><stop offset="95%" stopColor="#14b8a6" stopOpacity={0} /></linearGradient>
+                <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4285F4" stopOpacity={0.3} /><stop offset="95%" stopColor="#4285F4" stopOpacity={0} /></linearGradient>
                 <linearGradient id="gPur" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0} /></linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -283,7 +288,7 @@ function Dashboard() {
               <YAxis tickFormatter={fmtCompact} tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <Tooltip formatter={v => fmtRupiah(v)} />
               <Legend />
-              <Area type="monotone" dataKey="penjualan" stroke="#14b8a6" fill="url(#gSales)" strokeWidth={2} />
+              <Area type="monotone" dataKey="penjualan" stroke="#4285F4" fill="url(#gSales)" strokeWidth={2} />
               <Area type="monotone" dataKey="pembelian" stroke="#6366f1" fill="url(#gPur)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
@@ -323,7 +328,7 @@ function Dashboard() {
               <XAxis type="number" tickFormatter={fmtCompact} tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="#94a3b8" />
               <Tooltip formatter={v => fmtRupiah(v)} />
-              <Bar dataKey="value" fill="#14b8a6" radius={[0, 6, 6, 0]} />
+              <Bar dataKey="value" fill="#4285F4" radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -331,7 +336,7 @@ function Dashboard() {
 
       {/* Recommendations */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold text-slate-900">Rekomendasi AI</h3><Sparkles className="w-4 h-4 text-teal-500" /></div>
+        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold text-slate-900">Rekomendasi AI</h3><Sparkles className="w-4 h-4 text-brand-500" /></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {recs.map((r, i) => (
             <div key={i} className={`p-3 rounded-lg border-l-4 ${r.priority === 'high' ? 'bg-red-50 border-red-500' : r.priority === 'medium' ? 'bg-amber-50 border-amber-500' : 'bg-slate-50 border-slate-400'}`}>
@@ -370,12 +375,12 @@ function Modal({ open, onClose, title, children, footer }) {
 }
 
 function Field({ label, children, required }) { return (<div><label className="block text-xs font-medium text-slate-700 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>); }
-function Input(props) { return <input {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm ${props.className || ''}`} />; }
-function TextArea(props) { return <textarea {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm ${props.className || ''}`} />; }
-function SelectFld({ children, ...props }) { return <select {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm bg-white ${props.className || ''}`}>{children}</select>; }
-function PrimaryButton({ children, ...props }) { return <button {...props} className={`px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-600 text-white text-sm font-medium shadow-sm inline-flex items-center gap-2 disabled:opacity-50 transition ${props.className || ''}`}>{children}</button>; }
+function Input(props) { return <input {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm ${props.className || ''}`} />; }
+function TextArea(props) { return <textarea {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm ${props.className || ''}`} />; }
+function SelectFld({ children, ...props }) { return <select {...props} className={`w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm bg-white ${props.className || ''}`}>{children}</select>; }
+function PrimaryButton({ children, ...props }) { return <button {...props} className={`px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium shadow-sm inline-flex items-center gap-2 disabled:opacity-50 transition ${props.className || ''}`}>{children}</button>; }
 function GhostButton({ children, ...props }) { return <button {...props} className={`px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium inline-flex items-center gap-2 transition ${props.className || ''}`}>{children}</button>; }
-function Toggle({ checked, onChange }) { return (<button onClick={() => onChange(!checked)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${checked ? 'bg-teal-500' : 'bg-slate-300'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${checked ? 'translate-x-5' : 'translate-x-1'}`} /></button>); }
+function Toggle({ checked, onChange }) { return (<button onClick={() => onChange(!checked)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${checked ? 'bg-brand-500' : 'bg-slate-300'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${checked ? 'translate-x-5' : 'translate-x-1'}`} /></button>); }
 
 function ProductsPage() {
   const [items, setItems] = useState([]);
@@ -415,7 +420,7 @@ function ProductsPage() {
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input placeholder="Cari produk atau SKU..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm" />
+            <input placeholder="Cari produk atau SKU..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm" />
           </div>
           <GhostButton><Filter className="w-4 h-4" />Filter</GhostButton>
         </div>
@@ -549,7 +554,7 @@ function MasterCRUD({ title, breadcrumb, endpoint, columns, formFields, extraFet
         <div className="p-4 border-b border-slate-100">
           <div className="relative max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input placeholder="Cari..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm" />
+            <input placeholder="Cari..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm" />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -688,7 +693,7 @@ function SalesTransactionPage() {
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input placeholder="Cari no. order atau pelanggan..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm" />
+            <input placeholder="Cari no. order atau pelanggan..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm" />
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="bg-slate-100 px-2 py-1 rounded">Total: {orders.length}</span>
@@ -716,7 +721,7 @@ function SalesTransactionPage() {
               {filtered.map(o => (
                 <tr key={o.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => viewDetail(o)}>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-teal-700">{o.order_number}</div>
+                    <div className="font-medium text-brand-700">{o.order_number}</div>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{fmtDate(o.order_date)}</td>
                   <td className="px-4 py-3">
@@ -882,13 +887,13 @@ function CreateSalesOrderModal({ open, onClose, customers, products, branches, o
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-slate-900">Item Penjualan</h4>
-              <button onClick={() => setShowAddItem(!showAddItem)} className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+              <button onClick={() => setShowAddItem(!showAddItem)} className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
                 <Plus className="w-3.5 h-3.5" />Tambah Item
               </button>
             </div>
 
             {showAddItem && (
-              <div className="bg-teal-50 rounded-lg p-4 mb-3 border border-teal-100">
+              <div className="bg-brand-50 rounded-lg p-4 mb-3 border border-brand-100">
                 <div className="grid grid-cols-4 gap-3">
                   <div className="col-span-2">
                     <Field label="Produk">
@@ -912,7 +917,7 @@ function CreateSalesOrderModal({ open, onClose, customers, products, branches, o
                   </Field>
                 </div>
                 <div className="flex items-center justify-between mt-3">
-                  <span className="text-sm text-teal-700 font-medium">
+                  <span className="text-sm text-brand-700 font-medium">
                     Subtotal: {fmtRp(itemForm.quantity * itemForm.price)}
                   </span>
                   <div className="flex gap-2">
@@ -1062,14 +1067,14 @@ function SalesOrderDetailModal({ open, onClose, order, onConfirm, onCancel, prod
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-slate-900">Item ({(order.items || []).length})</h4>
               {isDraft && (
-                <button onClick={() => setAddingItem(!addingItem)} className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                <button onClick={() => setAddingItem(!addingItem)} className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
                   <Plus className="w-3.5 h-3.5" />Tambah Item
                 </button>
               )}
             </div>
 
             {addingItem && isDraft && (
-              <div className="bg-teal-50 rounded-lg p-4 mb-3 border border-teal-100">
+              <div className="bg-brand-50 rounded-lg p-4 mb-3 border border-brand-100">
                 <div className="grid grid-cols-4 gap-3">
                   <div className="col-span-2">
                     <SelectFld value={itemForm.product_id} onChange={e => {
@@ -1182,12 +1187,12 @@ function ActivityPage() {
   const trend = summary?.trend || [];
   const byModule = summary?.by_module || [];
   const byAction = summary?.by_action || [];
-  const actionColor = { CREATE: 'bg-green-100 text-green-700', UPDATE: 'bg-blue-100 text-blue-700', DELETE: 'bg-red-100 text-red-700', CONFIRM: 'bg-teal-100 text-teal-700', CANCEL: 'bg-orange-100 text-orange-700', TRANSFER: 'bg-indigo-100 text-indigo-700', OPNAME: 'bg-purple-100 text-purple-700', ADJUSTMENT: 'bg-amber-100 text-amber-700' };
+  const actionColor = { CREATE: 'bg-green-100 text-green-700', UPDATE: 'bg-blue-100 text-blue-700', DELETE: 'bg-red-100 text-red-700', CONFIRM: 'bg-brand-100 text-brand-700', CANCEL: 'bg-orange-100 text-orange-700', TRANSFER: 'bg-indigo-100 text-indigo-700', OPNAME: 'bg-purple-100 text-purple-700', ADJUSTMENT: 'bg-amber-100 text-amber-700' };
   return (
     <div className="p-6 space-y-6">
       <PageHeader title="Log Aktivitas" breadcrumb="Perusahaan > Log Aktivitas" />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Aktivitas" value={fmtNum(summary?.total)} icon={Activity} color="from-teal-500 to-teal-600" />
+        <StatCard label="Total Aktivitas" value={fmtNum(summary?.total)} icon={Activity} color="from-brand-500 to-brand-600" />
         <StatCard label="Hari Ini" value={fmtNum(summary?.today)} icon={ClipboardList} color="from-blue-500 to-blue-600" />
         <StatCard label="Jenis Aksi" value={fmtNum(byAction.length)} icon={FileText} color="from-purple-500 to-purple-600" />
         <StatCard label="Modul Terlibat" value={fmtNum(byModule.length)} icon={Boxes} color="from-orange-500 to-orange-600" />
@@ -1201,7 +1206,7 @@ function ActivityPage() {
               <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <Tooltip />
-              <Line type="monotone" dataKey="value" name="Aktivitas" stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="value" name="Aktivitas" stroke="#4285F4" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1287,7 +1292,7 @@ function CashFlowReport() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Total Kas Masuk" value={fmtRupiah(data?.total_inflow)} icon={TrendingUp} color="from-emerald-500 to-emerald-600" />
         <StatCard label="Total Kas Keluar" value={fmtRupiah(data?.total_outflow)} icon={TrendingDown} color="from-red-500 to-red-600" />
-        <StatCard label="Arus Kas Bersih" value={fmtRupiah(data?.net)} icon={Wallet} color="from-teal-500 to-teal-600" />
+        <StatCard label="Arus Kas Bersih" value={fmtRupiah(data?.net)} icon={Wallet} color="from-brand-500 to-brand-600" />
       </div>
       <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
         <h3 className="font-semibold text-slate-900 mb-4">Arus Kas per Bulan</h3>
@@ -1333,7 +1338,7 @@ function PurchaseTransactionPage() {
       <PageHeader title="Transaksi Pembelian" breadcrumb="Pembelian > Transaksi Pembelian" actions={<PrimaryButton onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" />Buat Pembelian</PrimaryButton>} />
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="relative flex-1 max-w-md"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input placeholder="Cari no. PO atau pemasok..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm" /></div>
+          <div className="relative flex-1 max-w-md"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input placeholder="Cari no. PO atau pemasok..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm" /></div>
           <div className="flex items-center gap-2 text-xs text-slate-500"><span className="bg-slate-100 px-2 py-1 rounded">Total: {orders.length}</span><span className="bg-green-50 text-green-600 px-2 py-1 rounded">Konfirmasi: {orders.filter(o => o.status === 'CONFIRMED').length}</span></div>
         </div>
         <div className="overflow-x-auto">
@@ -1346,7 +1351,7 @@ function PurchaseTransactionPage() {
               {!loading && filtered.length === 0 && <tr><td colSpan="7" className="text-center py-8 text-slate-400">Belum ada transaksi pembelian</td></tr>}
               {filtered.map(o => (
                 <tr key={o.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => viewDetail(o)}>
-                  <td className="px-4 py-3 font-medium text-teal-700">{o.order_number}</td>
+                  <td className="px-4 py-3 font-medium text-brand-700">{o.order_number}</td>
                   <td className="px-4 py-3 text-slate-600">{o.order_date}</td>
                   <td className="px-4 py-3 text-slate-900">{o.supplier_name || '-'}</td>
                   <td className="px-4 py-3 text-slate-600">{o.branch_name || '-'}</td>
@@ -1405,7 +1410,7 @@ function CreatePurchaseModal({ open, onClose, suppliers, products, branches, onS
             <Field label="Catatan"><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></Field>
           </div>
           <div>
-            <div className="bg-teal-50 rounded-lg p-4 mb-3 border border-teal-100">
+            <div className="bg-brand-50 rounded-lg p-4 mb-3 border border-brand-100">
               <div className="grid grid-cols-4 gap-3">
                 <div className="col-span-2"><Field label="Produk"><SelectFld value={itemForm.product_id} onChange={e => { const pid = e.target.value; const pr = products.find(p => p.id === pid); setItemForm({ ...itemForm, product_id: pid, price: pr?.cogs || 0 }); }}><option value="">- Pilih Produk -</option>{products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}</SelectFld></Field></div>
                 <Field label="Qty"><Input type="number" min="1" value={itemForm.quantity} onChange={e => setItemForm({ ...itemForm, quantity: parseFloat(e.target.value) || 0 })} /></Field>
@@ -1520,7 +1525,7 @@ const PAGE_CONFIGS = {
 const REPORT_CONFIGS = {
   'stock-warehouse': { title: 'Stok per Gudang', breadcrumb: 'Persediaan > Stok per Gudang', endpoint: '/analytics/stock-by-warehouse', cards: d => [{ label: 'Total Item', value: fmtNum(d?.count), icon: Package, color: 'from-blue-500 to-blue-600' }, { label: 'Nilai Total', value: fmtRupiah((d?.items || []).reduce((s, i) => s + i.value, 0)), icon: DollarSign, color: 'from-emerald-500 to-emerald-600' }], columns: [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Produk' }, { key: 'stock_qty', label: 'Stok', align: 'right', render: r => fmtNum(r.stock_qty) + ' ' + r.uom }, { key: 'selling_price', label: 'Harga', align: 'right', render: rp('selling_price') }, { key: 'value', label: 'Nilai', align: 'right', render: rp('value') }] },
   'reorder-stock': { title: 'Pemesanan Ulang Stok', breadcrumb: 'Persediaan > Pemesanan Ulang', endpoint: '/analytics/reorder', cards: d => [{ label: 'Perlu Restock', value: fmtNum(d?.count), icon: AlertCircle, color: 'from-red-500 to-red-600' }], columns: [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Produk' }, { key: 'category', label: 'Kategori' }, { key: 'stock_qty', label: 'Stok', align: 'right', render: r => fmtNum(r.stock_qty) }, { key: 'reorder_point', label: 'Titik Reorder', align: 'right', render: r => fmtNum(r.reorder_point) }, { key: 'suggested_qty', label: 'Saran Pesan', align: 'right', render: r => fmtNum(r.suggested_qty) }] },
-  'product-performance': { title: 'Kinerja Produk', breadcrumb: 'Produk > Kinerja Produk', endpoint: '/analytics/product-performance', cards: d => [{ label: 'Produk Dianalisis', value: fmtNum(d?.count), icon: Package, color: 'from-teal-500 to-teal-600' }, { label: 'Total Pendapatan', value: fmtRupiah((d?.items || []).reduce((s, i) => s + i.revenue, 0)), icon: TrendingUp, color: 'from-pink-500 to-pink-600' }], columns: [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Produk' }, { key: 'qty_sold', label: 'Terjual', align: 'right', render: r => fmtNum(r.qty_sold) }, { key: 'revenue', label: 'Pendapatan', align: 'right', render: rp('revenue') }] },
+  'product-performance': { title: 'Kinerja Produk', breadcrumb: 'Produk > Kinerja Produk', endpoint: '/analytics/product-performance', cards: d => [{ label: 'Produk Dianalisis', value: fmtNum(d?.count), icon: Package, color: 'from-brand-500 to-brand-600' }, { label: 'Total Pendapatan', value: fmtRupiah((d?.items || []).reduce((s, i) => s + i.revenue, 0)), icon: TrendingUp, color: 'from-pink-500 to-pink-600' }], columns: [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Produk' }, { key: 'qty_sold', label: 'Terjual', align: 'right', render: r => fmtNum(r.qty_sold) }, { key: 'revenue', label: 'Pendapatan', align: 'right', render: rp('revenue') }] },
   'supplier-performance': { title: 'Kinerja Pemasok', breadcrumb: 'Pembelian > Kinerja Pemasok', endpoint: '/analytics/supplier-performance', cards: d => [{ label: 'Pemasok', value: fmtNum(d?.count), icon: Truck, color: 'from-orange-500 to-orange-600' }, { label: 'Total Pembelian', value: fmtRupiah((d?.items || []).reduce((s, i) => s + i.total_value, 0)), icon: ShoppingBag, color: 'from-indigo-500 to-indigo-600' }], columns: [{ key: 'code', label: 'Kode' }, { key: 'name', label: 'Pemasok' }, { key: 'po_count', label: 'Jumlah PO', align: 'right' }, { key: 'total_value', label: 'Total Nilai', align: 'right', render: rp('total_value') }] },
   'bank-history': { title: 'Riwayat Bank', breadcrumb: 'Keuangan > Riwayat Bank', endpoint: '/master/bank-transactions', isRaw: true, columns: [{ key: 'trx_date', label: 'Tanggal' }, { key: 'bank_name', label: 'Bank' }, { key: 'trx_type', label: 'Tipe' }, { key: 'amount', label: 'Nominal', align: 'right', render: rp('amount') }, { key: 'description', label: 'Keterangan' }] },
 };
@@ -1547,7 +1552,7 @@ function StubPage({ title, breadcrumb }) {
     <div className="p-6">
       <PageHeader title={title} breadcrumb={breadcrumb} />
       <div className="bg-white rounded-xl border border-slate-100 p-12 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center mx-auto mb-4"><FileText className="w-8 h-8 text-teal-600" /></div>
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center mx-auto mb-4"><FileText className="w-8 h-8 text-brand-600" /></div>
         <h2 className="text-lg font-semibold text-slate-900 mb-2">Modul sedang dikembangkan</h2>
         <p className="text-sm text-slate-500 max-w-md mx-auto">Fitur <span className="font-medium">{title}</span> akan segera hadir. Modul ini menjadi bagian dari roadmap microservices berikutnya dengan integrasi ke Go backend dan PostgreSQL.</p>
       </div>
@@ -1559,6 +1564,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [current, setCurrent] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [branches, setBranches] = useState([]);
   const [activeBranch, setActiveBranch] = useState(null);
   const [ready, setReady] = useState(false);
@@ -1634,10 +1640,10 @@ function App() {
     return <StubPage title={found?.item?.label || current} breadcrumb={breadcrumb} />;
   }
   return (
-    <div className="min-h-screen flex bg-slate-50">
-      <Sidebar current={current} setCurrent={setCurrent} collapsed={collapsed} setCollapsed={setCollapsed} />
+    <div className="h-screen flex bg-slate-50 overflow-hidden">
+      <Sidebar current={current} setCurrent={setCurrent} collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header user={user} currentKey={current} branches={branches} activeBranch={activeBranch} setActiveBranch={setActiveBranch} onLogout={logout} />
+        <Header user={user} currentKey={current} branches={branches} activeBranch={activeBranch} setActiveBranch={setActiveBranch} onLogout={logout} onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto">{renderContent()}</main>
       </div>
     </div>
