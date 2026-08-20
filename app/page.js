@@ -7,7 +7,7 @@ import {
   Package, Store, Settings, ChevronDown, ChevronRight, Search, Bell,
   LogOut, Plus, Edit2, Trash2, Filter, Download, Upload, X,
   TrendingUp, AlertCircle, Users, Truck, Warehouse, DollarSign,
-  ChevronsLeft, ChevronsRight, Home, FileText, BarChart3, Sparkles
+  ChevronsLeft, ChevronsRight, Home, FileText, BarChart3, Sparkles, Eye
 } from 'lucide-react';
 
 const MENU = [
@@ -27,7 +27,7 @@ const MENU = [
       { key: 'budget', label: 'Anggaran', stub: true },
   ]},
   { key: 'sales', label: 'Penjualan', icon: ShoppingCart, children: [
-      { key: 'sales-transaction', label: 'Transaksi Penjualan', stub: true }, { key: 'sales-receipt', label: 'Penerimaan Penjualan', stub: true },
+      { key: 'sales-transaction', label: 'Transaksi Penjualan' }, { key: 'sales-receipt', label: 'Penerimaan Penjualan', stub: true },
       { key: 'sales-dp', label: 'Uang Muka Penjualan', stub: true }, { key: 'sales-return', label: 'Retur Penjualan', stub: true },
       { key: 'customers', label: 'Pelanggan' }, { key: 'customer-category', label: 'Kategori Pelanggan', stub: true },
       { key: 'sales-category', label: 'Kategori Penjualan', stub: true }, { key: 'sales-target', label: 'Target Penjualan', stub: true },
@@ -541,6 +541,561 @@ function MasterCRUD({ title, breadcrumb, endpoint, columns, formFields, extraFet
   );
 }
 
+function SalesTransactionPage() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [branches, setBranchList] = useState([]);
+  const [q, setQ] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [o, c, p, b] = await Promise.all([
+      api('/master/sales-orders'),
+      api('/master/customers'),
+      api('/master/products'),
+      api('/auth/branches'),
+    ]);
+    if (o.ok) setOrders(o.data || []);
+    if (c.ok) setCustomers(c.data || []);
+    if (p.ok) setProducts(p.data || []);
+    if (b.ok) setBranchList(b.data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = orders.filter(x => !q ||
+    x.order_number?.toLowerCase().includes(q.toLowerCase()) ||
+    x.customer_name?.toLowerCase().includes(q.toLowerCase())
+  );
+
+  const fmtRp = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(n || 0);
+  const fmtDate = d => { try { return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }); } catch { return d; } };
+
+  const statusBadge = (s) => {
+    const map = {
+      'DRAFT': 'bg-slate-100 text-slate-700',
+      'CONFIRMED': 'bg-blue-100 text-blue-700',
+      'INVOICED': 'bg-purple-100 text-purple-700',
+      'PAID': 'bg-green-100 text-green-700',
+      'CANCELLED': 'bg-red-100 text-red-700',
+    };
+    return <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${map[s] || 'bg-slate-100 text-slate-600'}`}>{s}</span>;
+  };
+
+  async function viewDetail(order) {
+    const r = await api(`/master/sales-orders/${order.id}`);
+    if (r.ok) {
+      setSelectedOrder(r.data);
+      setShowDetail(true);
+    } else toast.error('Gagal memuat detail');
+  }
+
+  async function confirmOrder(orderId) {
+    if (!confirm('Konfirmasi order ini? Stok akan dikurangi.')) return;
+    const r = await api(`/master/sales-orders/${orderId}/confirm`, { method: 'POST' });
+    if (r.ok) { toast.success('Order dikonfirmasi!'); load(); setShowDetail(false); }
+    else toast.error(r.data?.error || 'Gagal konfirmasi');
+  }
+
+  async function cancelOrder(orderId) {
+    if (!confirm('Batalkan order ini? Stok akan dikembalikan jika sudah dikonfirmasi.')) return;
+    const r = await api(`/master/sales-orders/${orderId}/cancel`, { method: 'POST' });
+    if (r.ok) { toast.success('Order dibatalkan'); load(); setShowDetail(false); }
+    else toast.error(r.data?.error || 'Gagal batalkan');
+  }
+
+  async function deleteOrder(orderId) {
+    if (!confirm('Hapus order draft ini?')) return;
+    const r = await api(`/master/sales-orders/${orderId}`, { method: 'DELETE' });
+    if (r.ok) { toast.success('Order dihapus'); load(); }
+    else toast.error(r.data?.error || 'Gagal hapus');
+  }
+
+  return (
+    <div className="p-6">
+      <PageHeader title="Transaksi Penjualan" breadcrumb="Penjualan > Transaksi Penjualan" actions={
+        <PrimaryButton onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" />Buat Penjualan</PrimaryButton>
+      } />
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input placeholder="Cari no. order atau pelanggan..." value={q} onChange={e => setQ(e.target.value)} className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none text-sm" />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="bg-slate-100 px-2 py-1 rounded">Total: {orders.length}</span>
+            <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded">Konfirmasi: {orders.filter(o => o.status === 'CONFIRMED').length}</span>
+            <span className="bg-slate-50 px-2 py-1 rounded">Draft: {orders.filter(o => o.status === 'DRAFT').length}</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50 text-xs text-slate-600 uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium">No. Order</th>
+                <th className="text-left px-4 py-3 font-medium">Tanggal</th>
+                <th className="text-left px-4 py-3 font-medium">Pelanggan</th>
+                <th className="text-left px-4 py-3 font-medium">Cabang</th>
+                <th className="text-left px-4 py-3 font-medium">Pembayaran</th>
+                <th className="text-right px-4 py-3 font-medium">Total</th>
+                <th className="text-center px-4 py-3 font-medium">Status</th>
+                <th className="text-center px-4 py-3 font-medium">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {loading && <tr><td colSpan="8" className="text-center py-8 text-slate-400">Memuat...</td></tr>}
+              {!loading && filtered.length === 0 && <tr><td colSpan="8" className="text-center py-8 text-slate-400">Belum ada transaksi penjualan</td></tr>}
+              {filtered.map(o => (
+                <tr key={o.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => viewDetail(o)}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-teal-700">{o.order_number}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{fmtDate(o.order_date)}</td>
+                  <td className="px-4 py-3">
+                    <div className="text-slate-900">{o.customer_name}</div>
+                    <div className="text-xs text-slate-500">{o.customer_code}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{o.branch_name || '-'}</td>
+                  <td className="px-4 py-3 text-slate-600">{o.payment_method || '-'}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmtRp(o.total)}</td>
+                  <td className="px-4 py-3 text-center">{statusBadge(o.status)}</td>
+                  <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                    <div className="inline-flex gap-1">
+                      {o.status === 'DRAFT' && (
+                        <>
+                          <button onClick={() => confirmOrder(o.id)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600" title="Konfirmasi">
+                            <FileText className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Hapus">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      {o.status === 'CONFIRMED' && (
+                        <button onClick={() => cancelOrder(o.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Batalkan">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <span>Menampilkan {filtered.length} dari {orders.length} transaksi</span>
+          <span>Total Nilai: {fmtRp(orders.reduce((s, o) => s + (o.total || 0), 0))}</span>
+        </div>
+      </div>
+
+      {/* Create Sales Order Modal */}
+      <CreateSalesOrderModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        customers={customers}
+        products={products}
+        branches={branches}
+        onSaved={() => { setShowCreate(false); load(); }}
+      />
+
+      {/* Order Detail Modal */}
+      <SalesOrderDetailModal
+        open={showDetail}
+        onClose={() => setShowDetail(false)}
+        order={selectedOrder}
+        onConfirm={confirmOrder}
+        onCancel={cancelOrder}
+        products={products}
+        onReload={() => { load(); viewDetail(selectedOrder); }}
+      />
+    </div>
+  );
+}
+
+function CreateSalesOrderModal({ open, onClose, customers, products, branches, onSaved }) {
+  const [form, setForm] = useState({
+    customer_id: '', branch_id: '', notes: '', payment_method: 'CASH', discount: 0, tax: 0,
+  });
+  const [items, setItems] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [itemForm, setItemForm] = useState({ product_id: '', quantity: 1, price: 0 });
+
+  useEffect(() => {
+    if (open) {
+      setForm({ customer_id: '', branch_id: '', notes: '', payment_method: 'CASH', discount: 0, tax: 0 });
+      setItems([]);
+    }
+  }, [open]);
+
+  function addItem() {
+    if (!itemForm.product_id || itemForm.quantity <= 0) { toast.error('Pilih produk dan qty'); return; }
+    const product = products.find(p => p.id === itemForm.product_id);
+    const price = itemForm.price || product?.selling_price || 0;
+    setItems([...items, {
+      product_id: itemForm.product_id,
+      product_name: product?.name || '',
+      product_sku: product?.sku || '',
+      quantity: itemForm.quantity,
+      price: price,
+      subtotal: itemForm.quantity * price,
+    }]);
+    setItemForm({ product_id: '', quantity: 1, price: 0 });
+    setShowAddItem(false);
+  }
+
+  function removeItem(idx) {
+    setItems(items.filter((_, i) => i !== idx));
+  }
+
+  const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+  const total = subtotal - (form.discount || 0) + (form.tax || 0);
+
+  async function save() {
+    if (items.length === 0) { toast.error('Tambahkan minimal 1 item'); return; }
+    setSaving(true);
+    const r = await api('/master/sales-orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...form,
+        items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+      }),
+    });
+    setSaving(false);
+    if (r.ok) {
+      toast.success(`Order ${r.data.order_number} berhasil dibuat`);
+      onSaved();
+    } else toast.error(r.data?.error || 'Gagal buat order');
+  }
+
+  const fmtRp = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(n || 0);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-900 text-lg">Buat Transaksi Penjualan</h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><X className="w-4 h-4 text-slate-500" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Order Header */}
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Pelanggan">
+              <SelectFld value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})}>
+                <option value="">Walk-in Customer</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
+              </SelectFld>
+            </Field>
+            <Field label="Cabang">
+              <SelectFld value={form.branch_id} onChange={e => setForm({...form, branch_id: e.target.value})}>
+                <option value="">- Pilih Cabang -</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </SelectFld>
+            </Field>
+            <Field label="Metode Pembayaran">
+              <SelectFld value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})}>
+                <option value="CASH">Tunai</option>
+                <option value="TRANSFER">Transfer Bank</option>
+                <option value="DEBIT">Kartu Debit</option>
+                <option value="CREDIT">Kartu Kredit</option>
+                <option value="QRIS">QRIS</option>
+              </SelectFld>
+            </Field>
+            <Field label="Catatan">
+              <Input value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Catatan order..." />
+            </Field>
+          </div>
+
+          {/* Items Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-slate-900">Item Penjualan</h4>
+              <button onClick={() => setShowAddItem(!showAddItem)} className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" />Tambah Item
+              </button>
+            </div>
+
+            {showAddItem && (
+              <div className="bg-teal-50 rounded-lg p-4 mb-3 border border-teal-100">
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="col-span-2">
+                    <Field label="Produk">
+                      <SelectFld value={itemForm.product_id} onChange={e => {
+                        const pid = e.target.value;
+                        const prod = products.find(p => p.id === pid);
+                        setItemForm({...itemForm, product_id: pid, price: prod?.selling_price || 0});
+                      }}>
+                        <option value="">- Pilih Produk -</option>
+                        {products.filter(p => p.is_active).map(p => (
+                          <option key={p.id} value={p.id}>{p.sku} - {p.name} (Stok: {p.stock_qty})</option>
+                        ))}
+                      </SelectFld>
+                    </Field>
+                  </div>
+                  <Field label="Qty">
+                    <Input type="number" min="1" value={itemForm.quantity} onChange={e => setItemForm({...itemForm, quantity: parseFloat(e.target.value) || 0})} />
+                  </Field>
+                  <Field label="Harga">
+                    <Input type="number" value={itemForm.price} onChange={e => setItemForm({...itemForm, price: parseFloat(e.target.value) || 0})} />
+                  </Field>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-sm text-teal-700 font-medium">
+                    Subtotal: {fmtRp(itemForm.quantity * itemForm.price)}
+                  </span>
+                  <div className="flex gap-2">
+                    <GhostButton onClick={() => setShowAddItem(false)}>Batal</GhostButton>
+                    <PrimaryButton onClick={addItem}>Tambah</PrimaryButton>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">Produk</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Qty</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Harga</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Subtotal</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.length === 0 && <tr><td colSpan="5" className="text-center py-6 text-slate-400">Belum ada item. Klik "Tambah Item" untuk menambahkan produk.</td></tr>}
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium text-slate-900">{item.product_name}</div>
+                        <div className="text-xs text-slate-500">{item.product_sku}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">{item.quantity}</td>
+                      <td className="px-4 py-2.5 text-right">{fmtRp(item.price)}</td>
+                      <td className="px-4 py-2.5 text-right font-medium">{fmtRp(item.subtotal)}</td>
+                      <td className="px-2 py-2.5">
+                        <button onClick={() => removeItem(idx)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="bg-slate-50 rounded-lg p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Diskon (Rp)">
+                <Input type="number" value={form.discount} onChange={e => setForm({...form, discount: parseFloat(e.target.value) || 0})} />
+              </Field>
+              <Field label="Pajak (Rp)">
+                <Input type="number" value={form.tax} onChange={e => setForm({...form, tax: parseFloat(e.target.value) || 0})} />
+              </Field>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-200 space-y-1.5">
+              <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{fmtRp(subtotal)}</span></div>
+              {form.discount > 0 && <div className="flex justify-between text-sm text-red-600"><span>Diskon</span><span>-{fmtRp(form.discount)}</span></div>}
+              {form.tax > 0 && <div className="flex justify-between text-sm text-slate-600"><span>Pajak</span><span>+{fmtRp(form.tax)}</span></div>}
+              <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t border-slate-300"><span>Total</span><span>{fmtRp(total)}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
+          <GhostButton onClick={onClose}>Batal</GhostButton>
+          <PrimaryButton onClick={save} disabled={saving || items.length === 0}>
+            {saving ? 'Menyimpan...' : 'Simpan sebagai Draft'}
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SalesOrderDetailModal({ open, onClose, order, onConfirm, onCancel, products, onReload }) {
+  const [addingItem, setAddingItem] = useState(false);
+  const [itemForm, setItemForm] = useState({ product_id: '', quantity: 1, price: 0 });
+
+  if (!open || !order) return null;
+
+  const fmtRp = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(n || 0);
+  const isDraft = order.status === 'DRAFT';
+  const isConfirmed = order.status === 'CONFIRMED';
+
+  const statusColors = {
+    'DRAFT': 'bg-slate-100 text-slate-700 border-slate-200',
+    'CONFIRMED': 'bg-blue-100 text-blue-700 border-blue-200',
+    'INVOICED': 'bg-purple-100 text-purple-700 border-purple-200',
+    'PAID': 'bg-green-100 text-green-700 border-green-200',
+    'CANCELLED': 'bg-red-100 text-red-700 border-red-200',
+  };
+
+  async function addItem() {
+    if (!itemForm.product_id || itemForm.quantity <= 0) { toast.error('Pilih produk dan qty'); return; }
+    const r = await api(`/master/sales-orders/${order.id}/items`, {
+      method: 'POST',
+      body: JSON.stringify(itemForm),
+    });
+    if (r.ok) { toast.success('Item ditambahkan'); setAddingItem(false); setItemForm({ product_id: '', quantity: 1, price: 0 }); onReload(); }
+    else toast.error(r.data?.error || 'Gagal tambah item');
+  }
+
+  async function removeItem(itemId) {
+    if (!confirm('Hapus item ini?')) return;
+    const r = await api(`/master/sales-orders/${order.id}/items/${itemId}`, { method: 'DELETE' });
+    if (r.ok) { toast.success('Item dihapus'); onReload(); }
+    else toast.error(r.data?.error || 'Gagal hapus item');
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="font-semibold text-slate-900 text-lg">{order.order_number}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {new Date(order.created_at).toLocaleString('id-ID')}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium border ${statusColors[order.status] || ''}`}>{order.status}</span>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><X className="w-4 h-4 text-slate-500" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Order Info */}
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-slate-500">Pelanggan:</span>
+              <p className="font-medium text-slate-900">{order.customer_name} {order.customer_code ? `(${order.customer_code})` : ''}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Cabang:</span>
+              <p className="font-medium text-slate-900">{order.branch_name || '-'}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Metode Pembayaran:</span>
+              <p className="font-medium text-slate-900">{order.payment_method || '-'}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Catatan:</span>
+              <p className="font-medium text-slate-900">{order.notes || '-'}</p>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-slate-900">Item ({(order.items || []).length})</h4>
+              {isDraft && (
+                <button onClick={() => setAddingItem(!addingItem)} className="text-sm text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1">
+                  <Plus className="w-3.5 h-3.5" />Tambah Item
+                </button>
+              )}
+            </div>
+
+            {addingItem && isDraft && (
+              <div className="bg-teal-50 rounded-lg p-4 mb-3 border border-teal-100">
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="col-span-2">
+                    <SelectFld value={itemForm.product_id} onChange={e => {
+                      const pid = e.target.value;
+                      const prod = products.find(p => p.id === pid);
+                      setItemForm({...itemForm, product_id: pid, price: prod?.selling_price || 0});
+                    }}>
+                      <option value="">- Pilih Produk -</option>
+                      {products.filter(p => p.is_active).map(p => (
+                        <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
+                      ))}
+                    </SelectFld>
+                  </div>
+                  <Input type="number" min="1" value={itemForm.quantity} onChange={e => setItemForm({...itemForm, quantity: parseFloat(e.target.value) || 0})} placeholder="Qty" />
+                  <Input type="number" value={itemForm.price} onChange={e => setItemForm({...itemForm, price: parseFloat(e.target.value) || 0})} placeholder="Harga" />
+                </div>
+                <div className="flex justify-end gap-2 mt-3">
+                  <GhostButton onClick={() => setAddingItem(false)}>Batal</GhostButton>
+                  <PrimaryButton onClick={addItem}>Tambah</PrimaryButton>
+                </div>
+              </div>
+            )}
+
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">Produk</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Qty</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Harga</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600">Subtotal</th>
+                    {isDraft && <th className="w-10"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(order.items || []).length === 0 && <tr><td colSpan={isDraft ? 5 : 4} className="text-center py-6 text-slate-400">Belum ada item</td></tr>}
+                  {(order.items || []).map(item => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium text-slate-900">{item.product_name}</div>
+                        <div className="text-xs text-slate-500">{item.product_sku}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">{item.quantity}</td>
+                      <td className="px-4 py-2.5 text-right">{fmtRp(item.price)}</td>
+                      <td className="px-4 py-2.5 text-right font-medium">{fmtRp(item.subtotal)}</td>
+                      {isDraft && (
+                        <td className="px-2 py-2.5">
+                          <button onClick={() => removeItem(item.id)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="bg-slate-50 rounded-lg p-4 space-y-1.5">
+            <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{fmtRp(order.subtotal)}</span></div>
+            {order.discount > 0 && <div className="flex justify-between text-sm text-red-600"><span>Diskon</span><span>-{fmtRp(order.discount)}</span></div>}
+            {order.tax > 0 && <div className="flex justify-between text-sm text-slate-600"><span>Pajak</span><span>+{fmtRp(order.tax)}</span></div>}
+            <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t border-slate-300"><span>Total</span><span>{fmtRp(order.total)}</span></div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between">
+          <div>
+            {(isDraft || isConfirmed) && (
+              <button onClick={() => onCancel(order.id)} className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium">
+                Batalkan Order
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <GhostButton onClick={onClose}>Tutup</GhostButton>
+            {isDraft && (
+              <PrimaryButton onClick={() => onConfirm(order.id)} disabled={(order.items || []).length === 0}>
+                Konfirmasi & Proses
+              </PrimaryButton>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StubPage({ title, breadcrumb }) {
   return (
     <div className="p-6">
@@ -589,6 +1144,7 @@ function App() {
   function renderContent() {
     if (current === 'dashboard') return <Dashboard />;
     if (isStub) return <StubPage title={found.item.label} breadcrumb={breadcrumb} />;
+    if (current === 'sales-transaction') return <SalesTransactionPage />;
     if (current === 'products') return <ProductsPage />;
     if (current === 'brands') return <MasterCRUD title="Merek" breadcrumb="Manajemen Produk > Merek" endpoint="/master/brands" columns={[{ key: 'name', label: 'Nama' }, { key: 'description', label: 'Deskripsi' }]} formFields={[{ key: 'name', label: 'Nama Merek', required: true }, { key: 'description', label: 'Deskripsi', type: 'textarea', full: true }]} />;
     if (current === 'categories') return <MasterCRUD title="Kategori" breadcrumb="Manajemen Produk > Kategori" endpoint="/master/categories" columns={[{ key: 'name', label: 'Nama' }, { key: 'description', label: 'Deskripsi' }]} formFields={[{ key: 'name', label: 'Nama Kategori', required: true }, { key: 'description', label: 'Deskripsi', type: 'textarea', full: true }]} />;

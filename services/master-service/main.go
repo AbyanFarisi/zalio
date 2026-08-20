@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -54,6 +55,10 @@ func main() {
 	mux.HandleFunc("/master/warehouses/", simpleItemHandler("warehouses"))
 	// Stock movements
 	mux.HandleFunc("/master/stock-movements", stockMovementsHandler)
+
+	// Sales Orders
+	mux.HandleFunc("/master/sales-orders", salesOrdersHandler)
+	mux.HandleFunc("/master/sales-orders/", salesOrderItemRouter)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -643,4 +648,550 @@ func sprintfInt(i int) string {
 		b = append([]byte{'-'}, b...)
 	}
 	return string(b)
+}
+
+// ==================== SALES ORDERS ====================
+
+func generateOrderNumber() string {
+	var seq int
+	row := db.QueryRow(`SELECT COUNT(*) + 1 FROM sales_orders WHERE DATE(created_at) = CURRENT_DATE`)
+	row.Scan(&seq)
+	now := time.Now()
+	return now.Format("20060102") + "-" + padLeft(sprintfInt(seq), 4, '0')
+}
+
+func padLeft(s string, length int, pad byte) string {
+	for len(s) < length {
+		s = string(pad) + s
+	}
+	return s
+}
+
+func salesOrdersHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		rows, err := db.Query(`
+			SELECT so.id, so.order_number, COALESCE(c.name,'Walk-in'), COALESCE(c.code,''),
+			       COALESCE(b.name,''), so.order_date, so.subtotal, so.tax, so.discount, so.total,
+			       so.status, so.created_at,
+			       COALESCE(so.customer_id::text,''), COALESCE(so.branch_id::text,''),
+			       COALESCE(so.notes,''), COALESCE(so.payment_method,'')
+			FROM sales_orders so
+			LEFT JOIN customers c ON so.customer_id=c.id
+			LEFT JOIN branches b ON so.branch_id=b.id
+			ORDER BY so.created_at DESC
+			LIMIT 200
+		`)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		defer rows.Close()
+		var list []map[string]interface{}
+		for rows.Next() {
+			var id, orderNum, custName, custCode, branchName, status, createdAt, custID, branchID, notes, payMethod string
+			var orderDate string
+			var subtotal, tax, disc, total float64
+			rows.Scan(&id, &orderNum, &custName, &custCode, &branchName, &orderDate, &subtotal, &tax, &disc, &total, &status, &createdAt, &custID, &branchID, &notes, &payMethod)
+			list = append(list, map[string]interface{}{
+				"id": id, "order_number": orderNum, "customer_name": custName,
+				"customer_code": custCode, "branch_name": branchName,
+				"order_date": orderDate, "subtotal": subtotal, "tax": tax,
+				"discount": disc, "total": total, "status": status,
+				"created_at": createdAt, "customer_id": custID, "branch_id": branchID,
+				"notes": notes, "payment_method": payMethod,
+			})
+		}
+		if list == nil {
+			list = []map[string]interface{}{}
+		}
+		writeJSON(w, 200, list)
+
+	case "POST":
+		var req struct {
+			CustomerID    string  `json:"customer_id"`
+			BranchID      string  `json:"branch_id"`
+			Notes         string  `json:"notes"`
+			PaymentMethod string  `json:"payment_method"`
+			Discount      float64 `json:"discount"`
+			Tax           float64 `json:"tax"`
+			Items         []struct {
+				ProductID string  `json:"product_id"`
+				Quantity  float64 `json:"quantity"`
+				Price     float64 `json:"price"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, 400, "invalid body: "+err.Error())
+			return
+		}
+
+		orderNum := "SO-" + generateOrderNumber()
+
+		tx, err := db.Begin()
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+
+		var custID, branchID interface{}
+		if req.CustomerID != "" {
+			custID = req.CustomerID
+		}
+		if req.BranchID != "" {
+			branchID = req.BranchID
+		}
+
+		// Calculate subtotal from items
+		var subtotal float64
+		for _, item := range req.Items {
+			subtotal += item.Quantity * item.Price
+		}
+		total := subtotal - req.Discount + req.Tax
+
+		var orderID string
+		err = tx.QueryRow(`
+			INSERT INTO sales_orders (order_number, customer_id, branch_id, subtotal, tax, discount, total, status, notes, payment_method)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT', $8, $9) RETURNING id
+		`, orderNum, custID, branchID, subtotal, req.Tax, req.Discount, total, req.Notes, req.PaymentMethod).Scan(&orderID)
+		if err != nil {
+			tx.Rollback()
+			writeErr(w, 400, "create order failed: "+err.Error())
+			return
+		}
+
+		// Insert items
+		for _, item := range req.Items {
+			itemSubtotal := item.Quantity * item.Price
+			_, err = tx.Exec(`
+				INSERT INTO sales_order_items (order_id, product_id, quantity, price, subtotal)
+				VALUES ($1, $2, $3, $4, $5)
+			`, orderID, item.ProductID, item.Quantity, item.Price, itemSubtotal)
+			if err != nil {
+				tx.Rollback()
+				writeErr(w, 400, "add item failed: "+err.Error())
+				return
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+
+		writeJSON(w, 201, map[string]interface{}{
+			"id": orderID, "order_number": orderNum, "status": "DRAFT", "total": total,
+		})
+
+	default:
+		writeErr(w, 405, "method not allowed")
+	}
+}
+
+func salesOrderItemRouter(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/master/sales-orders/")
+	parts := strings.Split(path, "/")
+	orderID := parts[0]
+
+	// /master/sales-orders/{id}/confirm
+	if len(parts) >= 2 && parts[1] == "confirm" && r.Method == "POST" {
+		confirmOrder(w, r, orderID)
+		return
+	}
+	// /master/sales-orders/{id}/cancel
+	if len(parts) >= 2 && parts[1] == "cancel" && r.Method == "POST" {
+		cancelOrder(w, r, orderID)
+		return
+	}
+	// /master/sales-orders/{id}/items
+	if len(parts) >= 2 && parts[1] == "items" {
+		if r.Method == "POST" {
+			addOrderItem(w, r, orderID)
+			return
+		}
+		// DELETE /master/sales-orders/{id}/items/{itemId}
+		if r.Method == "DELETE" && len(parts) >= 3 {
+			removeOrderItem(w, r, orderID, parts[2])
+			return
+		}
+	}
+
+	// GET /master/sales-orders/{id} - get single order with items
+	if r.Method == "GET" {
+		getSalesOrder(w, r, orderID)
+		return
+	}
+
+	// PUT/PATCH /master/sales-orders/{id} - update order
+	if r.Method == "PUT" || r.Method == "PATCH" {
+		updateSalesOrder(w, r, orderID)
+		return
+	}
+
+	// DELETE /master/sales-orders/{id}
+	if r.Method == "DELETE" {
+		deleteSalesOrder(w, r, orderID)
+		return
+	}
+
+	writeErr(w, 405, "method not allowed")
+}
+
+func getSalesOrder(w http.ResponseWriter, r *http.Request, orderID string) {
+	var id, orderNum, custName, custCode, branchName, status, createdAt, custID, branchID, notes, payMethod string
+	var orderDate string
+	var subtotal, tax, disc, total float64
+	err := db.QueryRow(`
+		SELECT so.id, so.order_number, COALESCE(c.name,'Walk-in'), COALESCE(c.code,''),
+		       COALESCE(b.name,''), so.order_date, so.subtotal, so.tax, so.discount, so.total,
+		       so.status, so.created_at,
+		       COALESCE(so.customer_id::text,''), COALESCE(so.branch_id::text,''),
+		       COALESCE(so.notes,''), COALESCE(so.payment_method,'')
+		FROM sales_orders so
+		LEFT JOIN customers c ON so.customer_id=c.id
+		LEFT JOIN branches b ON so.branch_id=b.id
+		WHERE so.id=$1
+	`, orderID).Scan(&id, &orderNum, &custName, &custCode, &branchName, &orderDate, &subtotal, &tax, &disc, &total, &status, &createdAt, &custID, &branchID, &notes, &payMethod)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+
+	// Get items
+	rows, err := db.Query(`
+		SELECT soi.id, soi.product_id, COALESCE(p.name,''), COALESCE(p.sku,''),
+		       soi.quantity, soi.price, soi.subtotal
+		FROM sales_order_items soi
+		LEFT JOIN products p ON soi.product_id=p.id
+		WHERE soi.order_id=$1
+	`, orderID)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	defer rows.Close()
+	var items []map[string]interface{}
+	for rows.Next() {
+		var iid, pid, pname, psku string
+		var qty, price, sub float64
+		rows.Scan(&iid, &pid, &pname, &psku, &qty, &price, &sub)
+		items = append(items, map[string]interface{}{
+			"id": iid, "product_id": pid, "product_name": pname,
+			"product_sku": psku, "quantity": qty, "price": price, "subtotal": sub,
+		})
+	}
+	if items == nil {
+		items = []map[string]interface{}{}
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"id": id, "order_number": orderNum, "customer_name": custName,
+		"customer_code": custCode, "branch_name": branchName,
+		"order_date": orderDate, "subtotal": subtotal, "tax": tax,
+		"discount": disc, "total": total, "status": status,
+		"created_at": createdAt, "customer_id": custID, "branch_id": branchID,
+		"notes": notes, "payment_method": payMethod, "items": items,
+	})
+}
+
+func updateSalesOrder(w http.ResponseWriter, r *http.Request, orderID string) {
+	// Check status - only DRAFT can be edited
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+	if currentStatus != "DRAFT" {
+		writeErr(w, 400, "hanya order DRAFT yang bisa diedit")
+		return
+	}
+
+	var req struct {
+		CustomerID    string  `json:"customer_id"`
+		BranchID      string  `json:"branch_id"`
+		Notes         string  `json:"notes"`
+		PaymentMethod string  `json:"payment_method"`
+		Discount      float64 `json:"discount"`
+		Tax           float64 `json:"tax"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	var custID, branchID interface{}
+	if req.CustomerID != "" {
+		custID = req.CustomerID
+	}
+	if req.BranchID != "" {
+		branchID = req.BranchID
+	}
+
+	_, err = db.Exec(`
+		UPDATE sales_orders SET customer_id=$1, branch_id=$2, notes=$3, payment_method=$4, discount=$5, tax=$6 WHERE id=$7
+	`, custID, branchID, req.Notes, req.PaymentMethod, req.Discount, req.Tax, orderID)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+
+	// Recalculate totals
+	recalcOrderTotal(orderID)
+
+	writeJSON(w, 200, map[string]string{"id": orderID, "status": "updated"})
+}
+
+func deleteSalesOrder(w http.ResponseWriter, r *http.Request, orderID string) {
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+	if currentStatus != "DRAFT" {
+		writeErr(w, 400, "hanya order DRAFT yang bisa dihapus")
+		return
+	}
+
+	tx, _ := db.Begin()
+	tx.Exec(`DELETE FROM sales_order_items WHERE order_id=$1`, orderID)
+	tx.Exec(`DELETE FROM sales_orders WHERE id=$1`, orderID)
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "deleted"})
+}
+
+func addOrderItem(w http.ResponseWriter, r *http.Request, orderID string) {
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+	if currentStatus != "DRAFT" {
+		writeErr(w, 400, "tidak bisa menambah item ke order yang sudah dikonfirmasi")
+		return
+	}
+
+	var req struct {
+		ProductID string  `json:"product_id"`
+		Quantity  float64 `json:"quantity"`
+		Price     float64 `json:"price"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	if req.ProductID == "" || req.Quantity <= 0 {
+		writeErr(w, 400, "product_id dan quantity wajib diisi")
+		return
+	}
+
+	// If price not specified, get from product
+	if req.Price == 0 {
+		db.QueryRow(`SELECT selling_price FROM products WHERE id=$1`, req.ProductID).Scan(&req.Price)
+	}
+
+	subtotal := req.Quantity * req.Price
+	var itemID string
+	err = db.QueryRow(`
+		INSERT INTO sales_order_items (order_id, product_id, quantity, price, subtotal)
+		VALUES ($1, $2, $3, $4, $5) RETURNING id
+	`, orderID, req.ProductID, req.Quantity, req.Price, subtotal).Scan(&itemID)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+
+	recalcOrderTotal(orderID)
+
+	writeJSON(w, 201, map[string]interface{}{
+		"id": itemID, "product_id": req.ProductID, "quantity": req.Quantity, "price": req.Price, "subtotal": subtotal,
+	})
+}
+
+func removeOrderItem(w http.ResponseWriter, r *http.Request, orderID string, itemID string) {
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+	if currentStatus != "DRAFT" {
+		writeErr(w, 400, "tidak bisa menghapus item dari order yang sudah dikonfirmasi")
+		return
+	}
+
+	_, err = db.Exec(`DELETE FROM sales_order_items WHERE id=$1 AND order_id=$2`, itemID, orderID)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+
+	recalcOrderTotal(orderID)
+
+	writeJSON(w, 200, map[string]string{"status": "deleted"})
+}
+
+func confirmOrder(w http.ResponseWriter, r *http.Request, orderID string) {
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+	if currentStatus != "DRAFT" {
+		writeErr(w, 400, "order sudah dikonfirmasi sebelumnya")
+		return
+	}
+
+	// Check items exist
+	var itemCount int
+	db.QueryRow(`SELECT COUNT(*) FROM sales_order_items WHERE order_id=$1`, orderID).Scan(&itemCount)
+	if itemCount == 0 {
+		writeErr(w, 400, "order tidak memiliki item")
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	// Deduct stock for each item
+	rows, err := tx.Query(`SELECT product_id, quantity FROM sales_order_items WHERE order_id=$1`, orderID)
+	if err != nil {
+		tx.Rollback()
+		writeErr(w, 500, err.Error())
+		return
+	}
+	type lineItem struct {
+		ProductID string
+		Quantity  float64
+	}
+	var items []lineItem
+	for rows.Next() {
+		var li lineItem
+		rows.Scan(&li.ProductID, &li.Quantity)
+		items = append(items, li)
+	}
+	rows.Close()
+
+	for _, li := range items {
+		// Check sufficient stock
+		var stockQty float64
+		tx.QueryRow(`SELECT stock_qty FROM products WHERE id=$1`, li.ProductID).Scan(&stockQty)
+		if stockQty < li.Quantity {
+			tx.Rollback()
+			var pname string
+			db.QueryRow(`SELECT name FROM products WHERE id=$1`, li.ProductID).Scan(&pname)
+			writeErr(w, 400, "stok tidak cukup untuk: "+pname+" (tersedia: "+sprintfInt(int(stockQty))+")")
+			return
+		}
+
+		// Deduct stock
+		_, err = tx.Exec(`UPDATE products SET stock_qty = stock_qty - $1, updated_at=NOW() WHERE id=$2`, li.Quantity, li.ProductID)
+		if err != nil {
+			tx.Rollback()
+			writeErr(w, 500, err.Error())
+			return
+		}
+
+		// Record stock movement
+		var orderNum string
+		tx.QueryRow(`SELECT order_number FROM sales_orders WHERE id=$1`, orderID).Scan(&orderNum)
+		_, err = tx.Exec(`INSERT INTO stock_movements (product_id, movement_type, quantity, reference, notes) VALUES ($1, 'OUT', $2, $3, 'Penjualan')`,
+			li.ProductID, li.Quantity, orderNum)
+		if err != nil {
+			tx.Rollback()
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+
+	// Update status to CONFIRMED
+	_, err = tx.Exec(`UPDATE sales_orders SET status='CONFIRMED' WHERE id=$1`, orderID)
+	if err != nil {
+		tx.Rollback()
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	writeJSON(w, 200, map[string]string{"id": orderID, "status": "CONFIRMED"})
+}
+
+func cancelOrder(w http.ResponseWriter, r *http.Request, orderID string) {
+	var currentStatus string
+	err := db.QueryRow(`SELECT status FROM sales_orders WHERE id=$1`, orderID).Scan(&currentStatus)
+	if err != nil {
+		writeErr(w, 404, "order not found")
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	// If confirmed, restore stock
+	if currentStatus == "CONFIRMED" {
+		rows, err := tx.Query(`SELECT product_id, quantity FROM sales_order_items WHERE order_id=$1`, orderID)
+		if err != nil {
+			tx.Rollback()
+			writeErr(w, 500, err.Error())
+			return
+		}
+		type lineItem struct {
+			ProductID string
+			Quantity  float64
+		}
+		var items []lineItem
+		for rows.Next() {
+			var li lineItem
+			rows.Scan(&li.ProductID, &li.Quantity)
+			items = append(items, li)
+		}
+		rows.Close()
+
+		for _, li := range items {
+			_, err = tx.Exec(`UPDATE products SET stock_qty = stock_qty + $1, updated_at=NOW() WHERE id=$2`, li.Quantity, li.ProductID)
+			if err != nil {
+				tx.Rollback()
+				writeErr(w, 500, err.Error())
+				return
+			}
+			var orderNum string
+			tx.QueryRow(`SELECT order_number FROM sales_orders WHERE id=$1`, orderID).Scan(&orderNum)
+			_, _ = tx.Exec(`INSERT INTO stock_movements (product_id, movement_type, quantity, reference, notes) VALUES ($1, 'IN', $2, $3, 'Pembatalan Penjualan')`,
+				li.ProductID, li.Quantity, orderNum)
+		}
+	}
+
+	_, err = tx.Exec(`UPDATE sales_orders SET status='CANCELLED' WHERE id=$1`, orderID)
+	if err != nil {
+		tx.Rollback()
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+
+	writeJSON(w, 200, map[string]string{"id": orderID, "status": "CANCELLED"})
+}
+
+func recalcOrderTotal(orderID string) {
+	var subtotal float64
+	db.QueryRow(`SELECT COALESCE(SUM(subtotal),0) FROM sales_order_items WHERE order_id=$1`, orderID).Scan(&subtotal)
+	var tax, discount float64
+	db.QueryRow(`SELECT COALESCE(tax,0), COALESCE(discount,0) FROM sales_orders WHERE id=$1`, orderID).Scan(&tax, &discount)
+	total := subtotal - discount + tax
+	db.Exec(`UPDATE sales_orders SET subtotal=$1, total=$2 WHERE id=$3`, subtotal, total, orderID)
 }
