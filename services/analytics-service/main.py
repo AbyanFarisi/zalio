@@ -9,7 +9,7 @@ import psycopg2
 import psycopg2.extras
 from collections import defaultdict
 
-DATABASE_URL = os.getenv("POSTGRES_URL", "postgresql://zalio:zalio123@localhost:5432/zalio")
+DATABASE_URL = os.getenv("POSTGRES_URL", "postgresql://zalio:zalio123@127.0.0.1:5432/zalio")
 
 app = FastAPI(title="Zalio Analytics Service", version="1.0")
 app.add_middleware(

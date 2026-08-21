@@ -21,7 +21,7 @@ var jwtSecret []byte
 func main() {
 	dsn := os.Getenv("POSTGRES_URL")
 	if dsn == "" {
-		dsn = "postgresql://zalio:zalio123@localhost:5432/zalio?sslmode=disable"
+		dsn = "postgresql://zalio:zalio123@127.0.0.1:5432/zalio?sslmode=disable"
 	}
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
